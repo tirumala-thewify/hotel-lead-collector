@@ -62,6 +62,7 @@ CORS_ALLOWED_ORIGINS = [
 ]
 
 GOOGLE_MAPS_API_KEY = os.getenv('GOOGLE_MAPS_API_KEY', '')
+GEOAPIFY_API_KEY = os.getenv('GEOAPIFY_API_KEY', '')
 APOLLO_API_KEY = os.getenv('APOLLO_API_KEY', '')
 OVERPASS_API_URLS = tuple(
     url.strip()

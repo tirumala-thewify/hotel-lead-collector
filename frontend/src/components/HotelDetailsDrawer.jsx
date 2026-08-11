@@ -7,7 +7,7 @@ function value(item) {
   return item === null || item === undefined || item === '' ? missing : item
 }
 
-function HotelDetailsDrawer({ hotel, onClose, onEnrich, onFindManagers, enriching, findingManagers, managerAvailable }) {
+function HotelDetailsDrawer({ hotel, onClose, onEnrich, onFindManagers, enriching, findingManagers, managerAvailable, enrichmentAvailable }) {
   useEffect(() => {
     if (!hotel) return undefined
     const closeOnEscape = (event) => { if (event.key === 'Escape') onClose() }
@@ -22,11 +22,11 @@ function HotelDetailsDrawer({ hotel, onClose, onEnrich, onFindManagers, enrichin
       <aside className="hotel-drawer" role="dialog" aria-modal="true" aria-labelledby="drawer-title">
         <header>
           <div>
-            <span className="section-kicker">Hotel details</span>
+            <span className="section-kicker">Business details</span>
             <h2 id="drawer-title">{value(hotel.name)}</h2>
             <p>{hotel.distance_km == null ? 'Distance unavailable' : `${Number(hotel.distance_km).toFixed(2)} km from selected location`}</p>
           </div>
-          <button type="button" className="drawer-close" onClick={onClose} aria-label="Close hotel details">×</button>
+          <button type="button" className="drawer-close" onClick={onClose} aria-label="Close business details">×</button>
         </header>
 
         <section><h3>Contact</h3><dl className="detail-list">
@@ -36,9 +36,9 @@ function HotelDetailsDrawer({ hotel, onClose, onEnrich, onFindManagers, enrichin
           <div className="wide-detail"><dt>Address</dt><dd>{value(hotel.address)}</dd></div>
         </dl></section>
 
-        <section><h3>Hotel</h3><dl className="detail-list">
+        <section><h3>Business</h3><dl className="detail-list">
           <div><dt>Brand</dt><dd>{value(hotel.brand)}</dd></div>
-          <div><dt>Stars</dt><dd>{value(hotel.stars)}</dd></div>
+          {hotel.stars && <div><dt>Stars</dt><dd>{value(hotel.stars)}</dd></div>}
           <div><dt>Source</dt><dd>{value(hotel.source)}</dd></div>
           <div><dt>Coordinates</dt><dd>{value(hotel.latitude)}, {value(hotel.longitude)}</dd></div>
         </dl></section>
@@ -58,10 +58,11 @@ function HotelDetailsDrawer({ hotel, onClose, onEnrich, onFindManagers, enrichin
         </section>
 
         <footer className="drawer-actions">
-          <button type="button" className="secondary-action" disabled={!hotel.website || enriching} onClick={() => onEnrich(hotel)}>
+          {!enrichmentAvailable && <p className="enrichment-limitation">Business enrichment for this category will be added in a later phase.</p>}
+          <button type="button" className="secondary-action" disabled={!enrichmentAvailable || !hotel.website || enriching} onClick={() => onEnrich(hotel)}>
             {enriching ? 'Enriching...' : 'Enrich Hotel'}
           </button>
-          <button type="button" className="primary-action" disabled={!managerAvailable || findingManagers} onClick={() => onFindManagers(hotel)} title={managerAvailable ? 'Search Apollo for hotel decision-makers' : 'Configure and enable Apollo in Settings'}>
+          <button type="button" className="primary-action" disabled={!enrichmentAvailable || !managerAvailable || findingManagers} onClick={() => onFindManagers(hotel)} title={enrichmentAvailable && managerAvailable ? 'Search Apollo for hotel decision-makers' : enrichmentAvailable ? 'Configure and enable Apollo in Settings' : 'Available for Hotels & Resorts only'}>
             {findingManagers ? 'Finding...' : 'Find Managers'}
           </button>
         </footer>

@@ -1,4 +1,5 @@
 const NEARBY_HOTELS_URL = 'http://127.0.0.1:8000/api/hotels/nearby/'
+const BUSINESS_CATEGORIES_URL = 'http://127.0.0.1:8000/api/hotels/categories/'
 const ENRICH_HOTEL_URL = 'http://127.0.0.1:8000/api/hotels/enrich/'
 const BULK_ENRICH_HOTELS_URL = 'http://127.0.0.1:8000/api/hotels/enrich/bulk/'
 const ENRICH_MANAGERS_URL = 'http://127.0.0.1:8000/api/hotels/enrich-managers/'
@@ -12,9 +13,9 @@ export class HotelServiceError extends Error {
   }
 }
 
-export async function fetchNearbyHotels(lat, lng, radius) {
+export async function fetchNearbyHotels(lat, lng, radius, category = 'hotels_resorts') {
   const url = new URL(NEARBY_HOTELS_URL)
-  url.search = new URLSearchParams({ lat, lng, radius }).toString()
+  url.search = new URLSearchParams({ lat, lng, radius, category }).toString()
 
   let response
   try {
@@ -34,7 +35,10 @@ export async function fetchNearbyHotels(lat, lng, radius) {
 
   if (!response.ok) {
     if (response.status === 400) {
-      throw new HotelServiceError('Please check the search values and try again.', 400)
+      throw new HotelServiceError(
+        data?.error || 'Please check the search values and try again.',
+        400,
+      )
     }
     throw new HotelServiceError(
       data?.error || 'The hotel API could not complete the request.',
@@ -47,6 +51,25 @@ export async function fetchNearbyHotels(lat, lng, radius) {
   }
 
   return data
+}
+
+export async function fetchBusinessCategories() {
+  let response
+  try {
+    response = await fetch(BUSINESS_CATEGORIES_URL)
+  } catch {
+    throw new HotelServiceError('Business types could not be loaded.')
+  }
+  let data
+  try {
+    data = JSON.parse(await response.text())
+  } catch {
+    throw new HotelServiceError('The business types API returned an invalid response.', response.status)
+  }
+  if (!response.ok || !Array.isArray(data?.categories)) {
+    throw new HotelServiceError(data?.error || 'Business types could not be loaded.', response.status)
+  }
+  return data.categories
 }
 
 export async function enrichHotel(hotel) {

@@ -1,6 +1,10 @@
 from ..google_places import search_nearby_hotels
 from ..openstreetmap import calculate_distance_km
-from .base import HotelProvider, HotelProviderConfigurationError
+from .base import (
+    HotelProvider,
+    HotelProviderConfigurationError,
+    UnsupportedBusinessCategoryError,
+)
 
 
 class GooglePlacesProvider(HotelProvider):
@@ -43,3 +47,13 @@ class GooglePlacesProvider(HotelProvider):
                 hotel['distance_km'] if hotel['distance_km'] is not None else float('inf'),
             ),
         )
+
+    def search_nearby_businesses(
+        self, latitude, longitude, radius, category='hotels_resorts',
+    ):
+        if category != 'hotels_resorts':
+            raise UnsupportedBusinessCategoryError(
+                'The selected business category is not yet supported by Google Places '
+                'in this version.'
+            )
+        return self.search_nearby_hotels(latitude, longitude, radius)

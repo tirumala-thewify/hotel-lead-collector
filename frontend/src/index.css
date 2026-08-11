@@ -500,12 +500,17 @@ td a:hover { text-decoration: underline; }
 .selected-location-line strong { min-width: 0; overflow: hidden; font-size: .86rem; text-overflow: ellipsis; white-space: nowrap; }
 .search-controls { align-self: center; }
 .radius-field { width: 122px; }
+.category-field { width: 230px; }
 .radius-field label { margin-bottom: 4px; font-size: .7rem; }
+.category-field label { margin-bottom: 4px; font-size: .7rem; }
 .radius-field select, .compact-search-form .search-button { height: 42px; }
 .compact-search-form .search-button { min-width: 124px; }
 .advanced-toggle { grid-column: 1 / -1; margin-top: -1px; font-size: .74rem; line-height: 1.4; }
 .advanced-fields { gap: 10px; padding-top: 8px; }
 .map-summary-workspace { gap: 14px; }
+.category-load-note, .enrichment-limitation { margin: 4px 0; color: #667085; font-size: .74rem; }
+.drawer-actions { flex-wrap: wrap; }
+.drawer-actions .enrichment-limitation { flex: 0 0 100%; }
 
 @media (max-width: 760px) {
   .compact-search-form { grid-template-columns: minmax(0, 1fr) auto; }
@@ -529,6 +534,7 @@ td a:hover { text-decoration: underline; }
   .unified-search-card .location-search-card form button { width: 100%; height: 40px; }
   .search-controls { flex-direction: row; }
   .radius-field { flex: 1; width: auto; }
+  .category-field { flex: 2; width: auto; }
   .compact-search-form .search-button { flex: 1; width: auto; }
 }
 

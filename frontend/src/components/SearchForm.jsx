@@ -29,7 +29,7 @@ function validate(values) {
   return { errors, latitude, longitude, radius }
 }
 
-function SearchForm({ values, onValuesChange, onSearch, loading, selectedLocationName }) {
+function SearchForm({ values, onValuesChange, onSearch, loading, selectedLocationName, categories, selectedCategory, onCategoryChange }) {
   const [errors, setErrors] = useState({})
   const [advancedOpen, setAdvancedOpen] = useState(false)
 
@@ -56,6 +56,12 @@ function SearchForm({ values, onValuesChange, onSearch, loading, selectedLocatio
         <strong title={selectedLocationName}>{selectedLocationName}</strong>
       </div>
       <div className="search-controls">
+        <div className="field-group category-field">
+          <label htmlFor="business-category">Business Type</label>
+          <select id="business-category" value={selectedCategory} onChange={(event) => onCategoryChange(event.target.value)} disabled={loading}>
+            {categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}
+          </select>
+        </div>
         <div className="field-group radius-field">
           <label htmlFor="radius">Radius</label>
           <select id="radius" name="radius" value={values.radius} onChange={handleChange} disabled={loading}>
@@ -66,7 +72,7 @@ function SearchForm({ values, onValuesChange, onSearch, loading, selectedLocatio
           </select>
         </div>
         <button className="search-button" type="submit" disabled={loading}>
-          {loading ? 'Searching...' : 'Find Hotels'}
+          {loading ? 'Searching...' : 'Find Businesses'}
         </button>
       </div>
       <button type="button" className="advanced-toggle" onClick={() => setAdvancedOpen((current) => !current)} aria-expanded={advancedOpen}>

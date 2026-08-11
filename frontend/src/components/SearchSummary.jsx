@@ -1,6 +1,6 @@
 import DataCoverage from './DataCoverage.jsx'
 
-function SearchSummary({ locationName, radius, providerName, hotels, hasSearched }) {
+function SearchSummary({ locationName, radius, providerName, hotels, hasSearched, categoryName }) {
   const total = hotels.length
   return (
     <aside className="search-summary-card" aria-label="Search summary">
@@ -11,7 +11,8 @@ function SearchSummary({ locationName, radius, providerName, hotels, hasSearched
       <dl className="summary-basics">
         <div><dt>Radius</dt><dd>{Number(radius) / 1000} km</dd></div>
         <div><dt>Provider</dt><dd>{providerName}</dd></div>
-        <div><dt>Hotels</dt><dd>{hasSearched ? total : '—'}</dd></div>
+        <div><dt>Category</dt><dd>{categoryName}</dd></div>
+        <div><dt>Businesses</dt><dd>{hasSearched ? total : '—'}</dd></div>
       </dl>
       <DataCoverage hotels={hotels} />
     </aside>

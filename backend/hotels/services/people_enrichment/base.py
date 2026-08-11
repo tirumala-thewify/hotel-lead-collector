@@ -3,7 +3,7 @@ from abc import ABC, abstractmethod
 
 class PeopleEnrichmentProvider(ABC):
     @abstractmethod
-    def search_decision_makers(self, hotel_name, website=None, brand=None, location=None):
+    def search_decision_makers(self, business, category='hotels_resorts'):
         raise NotImplementedError
 
 

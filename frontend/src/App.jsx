@@ -11,6 +11,7 @@ import ResultsToolbar from './components/ResultsToolbar.jsx'
 import HotelDetailsDrawer from './components/HotelDetailsDrawer.jsx'
 import {
   enrichHotel,
+  fetchBusinessCategories,
   fetchNearbyHotels,
   findHotelManagers,
   findManagersBulk,
@@ -21,6 +22,7 @@ import './index.css'
 import { fetchProviderSettings } from './services/providerSettingsService.js'
 
 function App() {
+  const defaultCategories = [{ id: 'hotels_resorts', name: 'Hotels & Resorts' }]
   const [hotels, setHotels] = useState([])
   const [hasSearched, setHasSearched] = useState(false)
   const [loading, setLoading] = useState(false)
@@ -43,9 +45,18 @@ function App() {
   const [selectedHotel, setSelectedHotel] = useState(null)
   const [drawerHotelKey, setDrawerHotelKey] = useState(null)
   const [selectedLocationName, setSelectedLocationName] = useState('Delhi Airport')
+  const [categories, setCategories] = useState(defaultCategories)
+  const [selectedCategory, setSelectedCategory] = useState('hotels_resorts')
+  const [categoryLoadError, setCategoryLoadError] = useState('')
+  const providerName = providerSettings?.hotel_provider === 'google'
+    ? 'Google Places'
+    : providerSettings?.hotel_provider === 'geoapify' ? 'Geoapify' : 'OpenStreetMap'
 
   useEffect(() => {
     fetchProviderSettings().then(setProviderSettings).catch(() => {})
+    fetchBusinessCategories()
+      .then(setCategories)
+      .catch(() => setCategoryLoadError('Business types could not be loaded. Hotels & Resorts remains available.'))
   }, [])
 
   const handleSearch = async ({ lat, lng, radius }) => {
@@ -56,7 +67,7 @@ function App() {
     setHasSearched(false)
 
     try {
-      const data = await fetchNearbyHotels(lat, lng, radius)
+      const data = await fetchNearbyHotels(lat, lng, radius, selectedCategory)
       setHotels(data.hotels)
       setSelectedHotelKeys([])
       setBulkManagerSummary(null)
@@ -67,9 +78,9 @@ function App() {
     } catch (requestError) {
       setHotels([])
       if (requestError instanceof HotelServiceError && requestError.status === 502) {
-        setError('Hotel data service is temporarily unavailable. Please try again later.')
+        setError('Business data service is temporarily unavailable. Please try again later.')
       } else {
-        setError(requestError.message || 'Unable to search for hotels. Please try again.')
+        setError(requestError.message || 'Unable to search for businesses. Please try again.')
       }
     } finally {
       setLoading(false)
@@ -103,7 +114,24 @@ function App() {
     setSearchValues(values)
   }
 
+  const clearSearchResults = () => {
+    setHotels([])
+    setHasSearched(false)
+    setError('')
+    setSelectedHotelKeys([])
+    setSelectedHotel(null)
+    setDrawerHotelKey(null)
+    setBulkManagerSummary(null)
+    setFreeEnrichmentSummary(null)
+  }
+
+  const handleCategoryChange = (category) => {
+    setSelectedCategory(category)
+    clearSearchResults()
+  }
+
   const handleFindManagers = async (hotel) => {
+    if (selectedCategory !== 'hotels_resorts') return
     const key = hotel.id || hotel.place_id || `${hotel.osm_type}-${hotel.osm_id}`
     if (managerSearches[key]) return
     setManagerSearches((current) => ({ ...current, [key]: true }))
@@ -147,6 +175,7 @@ function App() {
   }
 
   const handleBulkManagers = async () => {
+    if (selectedCategory !== 'hotels_resorts') return
     if (!selectedHotels.length || selectedHotels.length > 10 || bulkManagerRunning) return
     setBulkManagerRunning(true)
     setBulkManagerError('')
@@ -175,6 +204,7 @@ function App() {
   }
 
   const handleBulkFreeEnrichment = async () => {
+    if (selectedCategory !== 'hotels_resorts') return
     if (!selectedHotels.length || selectedHotels.length > 10 || freeEnrichmentRunning) return
     setFreeEnrichmentRunning(true)
     setFreeEnrichmentError('')
@@ -203,6 +233,7 @@ function App() {
   }
 
   const handleEnrich = async (hotel) => {
+    if (selectedCategory !== 'hotels_resorts') return
     const key = hotel.id || hotel.place_id || `${hotel.osm_type}-${hotel.osm_id}`
     if (enrichingHotels[key]) return
     setEnrichingHotels((current) => ({ ...current, [key]: true }))
@@ -235,35 +266,36 @@ function App() {
 
   return (
     <main className="app-shell">
-      <AppHeader providerName={providerSettings?.hotel_provider === 'google' ? 'Google Places' : 'OpenStreetMap'} />
-      <SearchPanel onLocationSelect={handleLocationSelect} values={searchValues} onValuesChange={handleSearchValuesChange} onSearch={handleSearch} loading={loading} selectedLocationName={selectedLocationName} />
+      <AppHeader providerName={providerName} />
+      <SearchPanel onLocationSelect={handleLocationSelect} values={searchValues} onValuesChange={handleSearchValuesChange} onSearch={handleSearch} loading={loading} selectedLocationName={selectedLocationName} categories={categories} selectedCategory={selectedCategory} onCategoryChange={handleCategoryChange} categoryLoadError={categoryLoadError} />
       <div className="map-summary-workspace">
         <HotelMap location={{ latitude: searchValues.lat, longitude: searchValues.lng }} radius={searchValues.radius} hotels={hotels} onLocationChange={handleLocationChange} selectedHotel={selectedHotel} onSelectHotel={setSelectedHotel} />
-        <SearchSummary locationName={selectedLocationName} radius={searchValues.radius} providerName={providerSettings?.hotel_provider === 'google' ? 'Google Places' : 'OpenStreetMap'} hotels={hotels} hasSearched={hasSearched} />
+        <SearchSummary locationName={selectedLocationName} radius={searchValues.radius} providerName={providerName} hotels={hotels} hasSearched={hasSearched} categoryName={categories.find((category) => category.id === selectedCategory)?.name || 'Hotels & Resorts'} />
       </div>
 
       <section className="results-section" aria-live="polite" aria-busy={loading}>
-        {loading && <div className="compact-alert loading-status">Searching nearby hotels...</div>}
+        {loading && <div className="compact-alert loading-status">Searching nearby businesses...</div>}
 
         {!loading && error && (
           <div className="compact-alert error-status" role="alert">
-            <strong>Hotel search temporarily unavailable.</strong>
-            <span>The public hotel data service could not respond. Please try again later.</span>
+            <strong>Business search temporarily unavailable.</strong>
+            <span>{error}</span>
           </div>
         )}
 
-        {!loading && !error && !hasSearched && <div className="clean-empty-state">Search a location and choose a radius to discover nearby hotels.</div>}
+        {!loading && !error && !hasSearched && <div className="clean-empty-state">Search a location, choose a business type and radius, then find nearby businesses.</div>}
 
         {!loading && !error && hasSearched && hotels.length === 0 && (
           <div className="clean-empty-state">
-            <strong>No hotels found in this area.</strong>
+            <strong>No businesses found in this area.</strong>
             <span>Try increasing the radius or choosing another location.</span>
           </div>
         )}
 
         {!loading && !error && hasSearched && hotels.length > 0 && (
           <>
-            <ResultsToolbar count={hotels.length} selectedCount={selectedHotels.length} allSelected={selectedHotels.length === hotels.length} onSelectAll={handleSelectAll} onClear={() => setSelectedHotelKeys([])}>
+            <ResultsToolbar count={hotels.length} selectedCount={selectedHotels.length} allSelected={selectedHotels.length === hotels.length} onSelectAll={handleSelectAll} onClear={() => setSelectedHotelKeys([])} categoryName={categories.find((category) => category.id === selectedCategory)?.name || 'Businesses'}>
+            {selectedCategory === 'hotels_resorts' ? <>
             <FreeEnrichmentActions
               selectedHotels={selectedHotels}
               running={freeEnrichmentRunning}
@@ -279,7 +311,8 @@ function App() {
               error={bulkManagerError}
               onRun={handleBulkManagers}
             />
-            <ExportButtons hotels={hotels} context={{ location: selectedLocationName, latitude: Number(searchValues.lat), longitude: Number(searchValues.lng), radius: Number(searchValues.radius), provider: providerSettings?.hotel_provider === 'google' ? 'Google Places' : 'OpenStreetMap' }} />
+            </> : <span className="action-note enrichment-limitation">Business enrichment for this category will be added in a later phase.</span>}
+            <ExportButtons hotels={hotels} context={{ location: selectedLocationName, latitude: Number(searchValues.lat), longitude: Number(searchValues.lng), radius: Number(searchValues.radius), provider: providerName }} />
             </ResultsToolbar>
             <HotelTable
               hotels={hotels}
@@ -292,7 +325,7 @@ function App() {
           </>
         )}
       </section>
-      <HotelDetailsDrawer hotel={drawerHotel} onClose={() => setDrawerHotelKey(null)} onEnrich={handleEnrich} onFindManagers={handleFindManagers} enriching={drawerHotel ? Boolean(enrichingHotels[hotelKey(drawerHotel)]) : false} findingManagers={drawerHotel ? Boolean(managerSearches[hotelKey(drawerHotel)]) : false} managerAvailable={Boolean(providerSettings?.apollo_enabled && providerSettings?.apollo_configured)} />
+      <HotelDetailsDrawer hotel={drawerHotel} onClose={() => setDrawerHotelKey(null)} onEnrich={handleEnrich} onFindManagers={handleFindManagers} enriching={drawerHotel ? Boolean(enrichingHotels[hotelKey(drawerHotel)]) : false} findingManagers={drawerHotel ? Boolean(managerSearches[hotelKey(drawerHotel)]) : false} managerAvailable={Boolean(providerSettings?.apollo_enabled && providerSettings?.apollo_configured)} enrichmentAvailable={selectedCategory === 'hotels_resorts'} />
     </main>
   )
 }

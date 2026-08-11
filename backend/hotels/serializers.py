@@ -1,5 +1,7 @@
 from rest_framework import serializers
 
+from .business_categories import BUSINESS_CATEGORIES
+
 
 class NearbyHotelsQuerySerializer(serializers.Serializer):
     lat = serializers.FloatField(
@@ -16,6 +18,11 @@ class NearbyHotelsQuerySerializer(serializers.Serializer):
         min_value=0,
         max_value=20_000,
         required=True,
+    )
+    category = serializers.ChoiceField(
+        choices=tuple(BUSINESS_CATEGORIES),
+        default='hotels_resorts',
+        required=False,
     )
 
     def validate_radius(self, value):
@@ -50,6 +57,12 @@ class ManagerEnrichmentSerializer(serializers.Serializer):
     website = serializers.URLField(required=False, allow_blank=True, allow_null=True)
     brand = serializers.CharField(required=False, allow_blank=True, allow_null=True)
     location = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    address = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    latitude = serializers.FloatField(required=False, allow_null=True)
+    longitude = serializers.FloatField(required=False, allow_null=True)
+    category = serializers.ChoiceField(
+        choices=tuple(BUSINESS_CATEGORIES), default='hotels_resorts', required=False
+    )
 
 
 class BulkManagerHotelSerializer(serializers.Serializer):
@@ -57,6 +70,11 @@ class BulkManagerHotelSerializer(serializers.Serializer):
     website = serializers.URLField(required=False, allow_blank=True, allow_null=True)
     brand = serializers.CharField(required=False, allow_blank=True, allow_null=True)
     address = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    latitude = serializers.FloatField(required=False, allow_null=True)
+    longitude = serializers.FloatField(required=False, allow_null=True)
+    category = serializers.ChoiceField(
+        choices=tuple(BUSINESS_CATEGORIES), default='hotels_resorts', required=False
+    )
 
 
 class BulkManagerEnrichmentSerializer(serializers.Serializer):

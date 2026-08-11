@@ -5,12 +5,17 @@ from rest_framework.test import APITestCase
 
 from hotels.models import ProviderSettings
 from hotels.services.providers import get_hotel_provider
-from hotels.services.providers.base import HotelProviderConfigurationError
+from hotels.services.providers.base import (
+    HotelProviderConfigurationError,
+    UnsupportedBusinessCategoryError,
+)
+from hotels.provider_settings import get_geoapify_api_key
+from hotels.services.providers.geoapify_provider import GeoapifyProvider
 from hotels.services.providers.google_provider import GooglePlacesProvider
 from hotels.services.providers.openstreetmap_provider import OpenStreetMapProvider
 
 
-@override_settings(GOOGLE_MAPS_API_KEY='', APOLLO_API_KEY='')
+@override_settings(GOOGLE_MAPS_API_KEY='', GEOAPIFY_API_KEY='', APOLLO_API_KEY='')
 class ProviderSettingsAPITests(APITestCase):
     url = '/api/settings/providers/'
 
@@ -19,6 +24,7 @@ class ProviderSettingsAPITests(APITestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()['hotel_provider'], 'openstreetmap')
         self.assertFalse(response.json()['apollo_enabled'])
+        self.assertFalse(response.json()['geoapify_configured'])
 
     def test_settings_get_does_not_expose_api_keys(self):
         provider_settings = ProviderSettings.load()
@@ -28,8 +34,29 @@ class ProviderSettingsAPITests(APITestCase):
         data = self.client.get(self.url).json()
         self.assertNotIn('google_api_key', data)
         self.assertNotIn('apollo_api_key', data)
+        self.assertNotIn('geoapify_api_key', data)
         self.assertNotIn('secret-google-key', str(data))
         self.assertNotIn('secret-apollo-key', str(data))
+
+    def test_save_geoapify_key_encrypted_and_hidden(self):
+        response = self.client.put(
+            self.url, {'geoapify_api_key': 'geoapify-secret'}, format='json'
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.json()['geoapify_configured'])
+        self.assertNotIn('geoapify_api_key', response.json())
+        provider_settings = ProviderSettings.load()
+        self.assertNotEqual(
+            provider_settings.geoapify_api_key_encrypted, 'geoapify-secret'
+        )
+        self.assertEqual(provider_settings.get_geoapify_api_key(), 'geoapify-secret')
+
+    def test_blank_geoapify_key_preserves_saved_key(self):
+        provider_settings = ProviderSettings.load()
+        provider_settings.set_geoapify_api_key('saved-key')
+        provider_settings.save()
+        self.client.put(self.url, {'geoapify_api_key': ''}, format='json')
+        self.assertEqual(ProviderSettings.load().get_geoapify_api_key(), 'saved-key')
 
     def test_save_google_key_encrypted(self):
         response = self.client.put(self.url, {'google_api_key': 'google-secret'}, format='json')
@@ -58,7 +85,7 @@ class ProviderSettingsAPITests(APITestCase):
         self.assertTrue(data['apollo_configured'])
 
 
-@override_settings(GOOGLE_MAPS_API_KEY='', APOLLO_API_KEY='')
+@override_settings(GOOGLE_MAPS_API_KEY='', GEOAPIFY_API_KEY='', APOLLO_API_KEY='')
 class HotelProviderSelectionTests(TestCase):
     def test_openstreetmap_provider_selected(self):
         self.assertIsInstance(get_hotel_provider(ProviderSettings.load()), OpenStreetMapProvider)
@@ -69,6 +96,34 @@ class HotelProviderSelectionTests(TestCase):
         settings_record.set_google_api_key('google-secret')
         settings_record.save()
         self.assertIsInstance(get_hotel_provider(settings_record), GooglePlacesProvider)
+
+    def test_geoapify_provider_selected(self):
+        settings_record = ProviderSettings.load()
+        settings_record.hotel_provider = ProviderSettings.GEOAPIFY
+        settings_record.set_geoapify_api_key('geoapify-secret')
+        settings_record.save()
+        self.assertIsInstance(get_hotel_provider(settings_record), GeoapifyProvider)
+
+    def test_geoapify_selected_without_key(self):
+        settings_record = ProviderSettings.load()
+        settings_record.hotel_provider = ProviderSettings.GEOAPIFY
+        settings_record.save()
+        with self.assertRaisesMessage(
+            HotelProviderConfigurationError,
+            'Geoapify is selected but no API key is configured.',
+        ):
+            get_hotel_provider(settings_record)
+
+    @override_settings(GEOAPIFY_API_KEY='environment-key')
+    def test_geoapify_environment_key_fallback(self):
+        self.assertEqual(get_geoapify_api_key(ProviderSettings.load()), 'environment-key')
+
+    @override_settings(GEOAPIFY_API_KEY='environment-key')
+    def test_geoapify_database_key_has_priority(self):
+        settings_record = ProviderSettings.load()
+        settings_record.set_geoapify_api_key('database-key')
+        settings_record.save()
+        self.assertEqual(get_geoapify_api_key(settings_record), 'database-key')
 
     def test_google_selected_without_key(self):
         settings_record = ProviderSettings.load()
@@ -92,6 +147,32 @@ class HotelProviderSelectionTests(TestCase):
         mock_search.assert_called_once_with(
             28.5, 77.1, 5000, api_key='database-google-key'
         )
+
+    @patch('hotels.services.providers.google_provider.search_nearby_hotels')
+    def test_google_generic_hotel_search_remains_supported(self, mock_search):
+        mock_search.return_value = []
+        provider = GooglePlacesProvider('google-key')
+        self.assertEqual(
+            provider.search_nearby_businesses(28.5, 77.1, 5000, 'hotels_resorts'),
+            [],
+        )
+        mock_search.assert_called_once()
+
+    @patch('hotels.services.providers.google_provider.search_nearby_hotels')
+    def test_google_rejects_non_hotel_category(self, mock_search):
+        provider = GooglePlacesProvider('google-key')
+        with self.assertRaisesMessage(
+            UnsupportedBusinessCategoryError, 'not yet supported by Google Places'
+        ):
+            provider.search_nearby_businesses(28.5, 77.1, 5000, 'restaurants')
+        mock_search.assert_not_called()
+
+    @patch('hotels.services.providers.openstreetmap_provider.search_nearby_businesses')
+    def test_openstreetmap_provider_forwards_category(self, mock_search):
+        mock_search.return_value = []
+        provider = OpenStreetMapProvider()
+        provider.search_nearby_businesses(28.5, 77.1, 2000, 'restaurants')
+        mock_search.assert_called_once_with(28.5, 77.1, 2000, 'restaurants')
 
 
 @override_settings(APOLLO_API_KEY='')

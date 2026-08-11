@@ -13,9 +13,11 @@ def _fernet():
 
 class ProviderSettings(models.Model):
     OPENSTREETMAP = 'openstreetmap'
+    GEOAPIFY = 'geoapify'
     GOOGLE = 'google'
     HOTEL_PROVIDER_CHOICES = [
         (OPENSTREETMAP, 'OpenStreetMap'),
+        (GEOAPIFY, 'Geoapify'),
         (GOOGLE, 'Google Places'),
     ]
 
@@ -25,6 +27,7 @@ class ProviderSettings(models.Model):
         default=OPENSTREETMAP,
     )
     google_api_key_encrypted = models.TextField(blank=True)
+    geoapify_api_key_encrypted = models.TextField(blank=True)
     apollo_enabled = models.BooleanField(default=False)
     apollo_api_key_encrypted = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -52,6 +55,12 @@ class ProviderSettings(models.Model):
 
     def get_google_api_key(self):
         return self._get_secret('google_api_key_encrypted')
+
+    def set_geoapify_api_key(self, value):
+        self._set_secret('geoapify_api_key_encrypted', value)
+
+    def get_geoapify_api_key(self):
+        return self._get_secret('geoapify_api_key_encrypted')
 
     def set_apollo_api_key(self, value):
         self._set_secret('apollo_api_key_encrypted', value)

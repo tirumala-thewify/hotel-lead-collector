@@ -54,10 +54,12 @@ class BulkManagerEnrichmentAPITests(APITestCase):
         }
         data = self._post([{'name': 'Roseate House'}]).json()
         self.assertEqual(data['results'][0], {
-            'hotel_name': 'Roseate House', 'status': 'FOUND',
+            'business_name': 'Roseate House', 'hotel_name': 'Roseate House',
+            'category': 'hotels_resorts', 'status': 'FOUND',
             'contacts': [{
                 'name': 'A Person', 'title': 'General Manager',
-                'department': 'General Management', 'email': None, 'phone': None,
+                'department': 'General Management', 'role_group': 'General Management',
+                'business_email': None, 'email': None, 'phone': None,
                 'linkedin_url': 'https://linkedin.com/in/a-person', 'source': 'Apollo',
             }],
         })
@@ -80,6 +82,21 @@ class BulkManagerEnrichmentAPITests(APITestCase):
             ['General Management', 'Marketing', 'Information Technology'],
         )
         self.assertEqual(mock_search.call_count, 2)
+
+    @patch('hotels.services.people_enrichment.bulk.search_decision_makers')
+    def test_bulk_forwards_each_business_category(self, mock_search):
+        mock_search.return_value = {'status': 'NOT_FOUND', 'contacts': []}
+        data = self._post([
+            {'name': 'ABC School', 'category': 'schools'},
+            {'name': 'XYZ Hospital', 'category': 'hospitals'},
+        ]).json()
+        self.assertEqual([result['category'] for result in data['results']], [
+            'schools', 'hospitals',
+        ])
+        self.assertEqual(
+            [call.kwargs['category'] for call in mock_search.call_args_list],
+            ['schools', 'hospitals'],
+        )
 
     @patch('hotels.services.people_enrichment.bulk.search_decision_makers')
     def test_organization_not_found(self, mock_search):

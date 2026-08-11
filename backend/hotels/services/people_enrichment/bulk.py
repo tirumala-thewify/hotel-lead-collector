@@ -15,7 +15,7 @@ def _normalize_contacts(contacts):
     for contact in contacts or []:
         if not isinstance(contact, dict):
             continue
-        department = contact.get('department')
+        department = contact.get('role_group') or contact.get('department')
         if not department or department in seen_departments:
             continue
         seen_departments.add(department)
@@ -23,6 +23,8 @@ def _normalize_contacts(contacts):
             'name': contact.get('name'),
             'title': contact.get('title'),
             'department': department,
+            'role_group': department,
+            'business_email': contact.get('business_email') or contact.get('email'),
             'email': contact.get('email'),
             'phone': contact.get('phone'),
             'linkedin_url': contact.get('linkedin_url'),
@@ -38,10 +40,8 @@ def enrich_managers_bulk(hotels, api_key):
     for hotel in hotels:
         try:
             provider_result = search_decision_makers(
-                hotel_name=hotel['name'],
-                website=hotel.get('website'),
-                brand=hotel.get('brand'),
-                location=hotel.get('address'),
+                business=hotel,
+                category=hotel.get('category', 'hotels_resorts'),
                 api_key=api_key,
             )
             contacts = _normalize_contacts(provider_result.get('contacts'))
@@ -54,7 +54,9 @@ def enrich_managers_bulk(hotels, api_key):
             contacts = []
             result_status = 'ERROR'
         results.append({
+            'business_name': hotel['name'],
             'hotel_name': hotel['name'],
+            'category': hotel.get('category', 'hotels_resorts'),
             'status': result_status,
             'contacts': contacts,
         })

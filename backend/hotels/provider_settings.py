@@ -12,6 +12,11 @@ def get_google_api_key(provider_settings=None):
     return provider_settings.get_google_api_key() or settings.GOOGLE_MAPS_API_KEY
 
 
+def get_geoapify_api_key(provider_settings=None):
+    provider_settings = provider_settings or get_provider_settings()
+    return provider_settings.get_geoapify_api_key() or settings.GEOAPIFY_API_KEY
+
+
 def get_apollo_api_key(provider_settings=None):
     provider_settings = provider_settings or get_provider_settings()
     return provider_settings.get_apollo_api_key() or settings.APOLLO_API_KEY
@@ -22,6 +27,7 @@ def public_provider_settings(provider_settings=None):
     return {
         'hotel_provider': provider_settings.hotel_provider,
         'google_configured': bool(get_google_api_key(provider_settings)),
+        'geoapify_configured': bool(get_geoapify_api_key(provider_settings)),
         'apollo_enabled': provider_settings.apollo_enabled,
         'apollo_configured': bool(get_apollo_api_key(provider_settings)),
     }

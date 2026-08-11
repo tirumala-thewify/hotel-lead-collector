@@ -11,13 +11,18 @@ from .serializers import (
     ManagerEnrichmentSerializer,
     NearbyHotelsQuerySerializer,
 )
+from .business_categories import get_business_categories, get_business_category
 from .services.enrichment import enrich_hotel_from_website
 from .services.enrichment.bulk import enrich_hotels_bulk
 from .services.enrichment.base import EnrichmentError
 from .services.openstreetmap import OpenStreetMapError, search_nearby_hotels
 from .services.google_places import GooglePlacesError
+from .services.geoapify import GeoapifyError
 from .services.providers import get_hotel_provider
-from .services.providers.base import HotelProviderConfigurationError
+from .services.providers.base import (
+    HotelProviderConfigurationError,
+    UnsupportedBusinessCategoryError,
+)
 from .provider_settings import get_apollo_api_key, get_provider_settings
 from .services.people_enrichment import search_decision_makers
 from .services.people_enrichment.bulk import enrich_managers_bulk
@@ -46,14 +51,17 @@ def nearby_hotels(request):
 
     try:
         provider = get_hotel_provider()
-        hotels = provider.search_nearby_hotels(
+        hotels = provider.search_nearby_businesses(
             latitude=params['lat'],
             longitude=params['lng'],
             radius=params['radius'],
+            category=params['category'],
         )
     except HotelProviderConfigurationError as exc:
         return Response({'error': str(exc)}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
-    except (OpenStreetMapError, GooglePlacesError):
+    except UnsupportedBusinessCategoryError as exc:
+        return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+    except (OpenStreetMapError, GooglePlacesError, GeoapifyError):
         logger.exception('Hotel provider search failed.')
         return Response(
             {'error': 'Unable to retrieve hotel data at this time.'},
@@ -63,6 +71,18 @@ def nearby_hotels(request):
     return Response({
         'count': len(hotels),
         'hotels': hotels,
+        'category': params['category'],
+        'category_display_name': get_business_category(params['category'])['display_name'],
+    })
+
+
+@api_view(['GET'])
+def business_categories(request):
+    return Response({
+        'categories': [
+            {'id': category['id'], 'name': category['display_name']}
+            for category in get_business_categories()
+        ],
     })
 
 
@@ -114,10 +134,15 @@ def enrich_managers(request):
 
     try:
         result = search_decision_makers(
-            hotel_name=params['name'],
-            website=params.get('website'),
-            brand=params.get('brand'),
-            location=params.get('location'),
+            business={
+                'name': params['name'],
+                'website': params.get('website'),
+                'brand': params.get('brand'),
+                'address': params.get('address') or params.get('location'),
+                'latitude': params.get('latitude'),
+                'longitude': params.get('longitude'),
+            },
+            category=params['category'],
             api_key=apollo_api_key,
         )
     except PeopleEnrichmentConfigurationError:

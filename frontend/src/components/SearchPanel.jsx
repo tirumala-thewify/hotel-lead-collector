@@ -3,14 +3,15 @@ import SearchForm from './SearchForm.jsx'
 
 function SearchPanel(props) {
   return (
-    <section className="unified-search-card" aria-labelledby="hotel-search-title">
+    <section className="unified-search-card" aria-labelledby="business-search-title">
       <div className="panel-heading">
         <div>
-          <h2 id="hotel-search-title">Search Hotels</h2>
-          <p>Search an airport, city, or area and choose a radius.</p>
+          <h2 id="business-search-title">Search Businesses</h2>
+          <p>Search an airport, city, or area, then choose a business type and radius.</p>
         </div>
       </div>
       <LocationSearch onSelect={props.onLocationSelect} />
+      {props.categoryLoadError && <p className="category-load-note" role="status">{props.categoryLoadError}</p>}
       <SearchForm {...props} />
     </section>
   )

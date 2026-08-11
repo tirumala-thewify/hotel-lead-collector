@@ -22,7 +22,7 @@ function HotelTable({ hotels, selectedHotelKeys, onToggleHotel, selectedHotel, o
         <table className="hotel-results-table">
           <thead><tr>
             <th scope="col" className="selection-cell"><span className="sr-only">Select</span></th>
-            <th scope="col">#</th><th scope="col">Hotel</th><th scope="col">Distance</th>
+            <th scope="col">#</th><th scope="col">Business Name</th><th scope="col">Distance</th>
             <th scope="col">Phone</th><th scope="col">Email</th><th scope="col">Contact Status</th><th scope="col">Action</th>
           </tr></thead>
           <tbody>{hotels.map((hotel, index) => {

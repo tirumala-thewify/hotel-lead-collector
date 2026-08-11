@@ -14,6 +14,9 @@ class ProviderSettingsUpdateSerializer(serializers.Serializer):
     google_api_key = serializers.CharField(
         required=False, allow_blank=True, trim_whitespace=False, write_only=True
     )
+    geoapify_api_key = serializers.CharField(
+        required=False, allow_blank=True, trim_whitespace=False, write_only=True
+    )
     apollo_enabled = serializers.BooleanField(required=False)
     apollo_api_key = serializers.CharField(
         required=False, allow_blank=True, trim_whitespace=False, write_only=True
@@ -35,6 +38,8 @@ def provider_settings_view(request):
         provider_settings.apollo_enabled = values['apollo_enabled']
     if 'google_api_key' in values:
         provider_settings.set_google_api_key(values['google_api_key'])
+    if values.get('geoapify_api_key'):
+        provider_settings.set_geoapify_api_key(values['geoapify_api_key'])
     if 'apollo_api_key' in values:
         provider_settings.set_apollo_api_key(values['apollo_api_key'])
     provider_settings.save()

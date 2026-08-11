@@ -8,6 +8,7 @@ import {
 function SettingsPage() {
   const [settings, setSettings] = useState(null)
   const [googleKey, setGoogleKey] = useState('')
+  const [geoapifyKey, setGeoapifyKey] = useState('')
   const [apolloKey, setApolloKey] = useState('')
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
@@ -36,7 +37,7 @@ function SettingsPage() {
   if (!settings) {
     return (
       <main className="settings-shell">
-        <a className="back-link" href="/">← Back to hotel search</a>
+        <a className="back-link" href="/">← Back to business search</a>
         <div className={`status-card ${error ? 'error-status' : 'loading-status'}`}>
           {error || 'Loading provider settings...'}
         </div>
@@ -46,7 +47,7 @@ function SettingsPage() {
 
   return (
     <main className="settings-shell">
-      <a className="back-link" href="/">← Back to hotel search</a>
+      <a className="back-link" href="/">← Back to business search</a>
       <header className="settings-header">
         <h1>Settings</h1>
         <p>Configure optional data providers.</p>
@@ -57,7 +58,7 @@ function SettingsPage() {
 
       <section className="settings-card">
         <div className="settings-card-heading">
-          <div><span className="section-kicker">Hotel data</span><h2>Hotel provider</h2><p>Choose the source used for nearby hotel searches.</p></div>
+          <div><span className="section-kicker">Business data</span><h2>Business data provider</h2><p>Choose the source used for nearby business searches.</p></div>
           <span className={`configured-badge ${settings.google_configured ? 'is-configured' : ''}`}>
             Google {settings.google_configured ? 'configured' : 'not configured'}
           </span>
@@ -66,21 +67,30 @@ function SettingsPage() {
           <label><input type="radio" name="hotel-provider" value="openstreetmap"
             checked={settings.hotel_provider === 'openstreetmap'}
             onChange={() => setSettings({ ...settings, hotel_provider: 'openstreetmap' })} />
-            <span><strong>OpenStreetMap <em className="inline-status">Default</em></strong><small>Free · No API key required</small></span>
+            <span><strong>OpenStreetMap <em className="inline-status">Default</em></strong><small>Free default business discovery · No API key required</small></span>
+          </label>
+          <label><input type="radio" name="hotel-provider" value="geoapify"
+            checked={settings.hotel_provider === 'geoapify'}
+            onChange={() => setSettings({ ...settings, hotel_provider: 'geoapify' })} />
+            <span><strong>Geoapify <em className="inline-status">{settings.geoapify_configured ? 'Configured' : 'Not configured'}</em></strong><small>Free tier / quota-based · API key required</small></span>
           </label>
           <label><input type="radio" name="hotel-provider" value="google"
             checked={settings.hotel_provider === 'google'}
             onChange={() => setSettings({ ...settings, hotel_provider: 'google' })} />
-            <span><strong>Google Places <em className="inline-status">Optional</em></strong><small>API key required</small></span>
+            <span><strong>Google Places <em className="inline-status">Optional</em></strong><small>Currently supports Hotels & Resorts · API key required</small></span>
           </label>
         </div>
+        <SecretInput id="geoapify-key" label="Geoapify API Key" value={geoapifyKey}
+          onChange={setGeoapifyKey} placeholder={settings.geoapify_configured ? 'Saved key is hidden' : 'Enter API key'} />
+        <p className="secret-help">Leave blank to keep the currently saved Geoapify key.</p>
         <SecretInput id="google-key" label="Google Places API Key" value={googleKey}
           onChange={setGoogleKey} placeholder={settings.google_configured ? 'Saved key is hidden' : 'Enter API key'} />
         <p className="secret-help">Leave blank to keep the existing saved key.</p>
         <button className="settings-save" disabled={saving} onClick={() => save({
           hotel_provider: settings.hotel_provider,
+          ...(geoapifyKey ? { geoapify_api_key: geoapifyKey } : {}),
           ...(googleKey ? { google_api_key: googleKey } : {}),
-        }, () => setGoogleKey(''))}>Save Changes</button>
+        }, () => { setGeoapifyKey(''); setGoogleKey('') })}>Save Changes</button>
       </section>
 
       <section className="settings-card">

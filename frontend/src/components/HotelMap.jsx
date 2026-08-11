@@ -59,7 +59,7 @@ function HotelMap({ location, radius, hotels, onLocationChange, selectedHotel, o
   )).slice(0, 100)
 
   return (
-    <section className="map-card" aria-label="Hotel location map">
+    <section className="map-card" aria-label="Business location map">
       <MapContainer center={center} zoom={12} scrollWheelZoom className="hotel-map">
         <TileLayer
           url="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
@@ -98,7 +98,7 @@ function HotelMap({ location, radius, hotels, onLocationChange, selectedHotel, o
           </Marker>
         ))}
       </MapContainer>
-      <p className="map-help">Search above or click anywhere on the map to choose a location. Hotel search runs only when you click Find Hotels.</p>
+      <p className="map-help">Search above or click anywhere on the map to choose a location. Business search runs only when you click Find Businesses.</p>
     </section>
   )
 }

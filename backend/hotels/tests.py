@@ -22,6 +22,7 @@ from hotels.services.openstreetmap import (
     search_nearby_businesses,
     search_nearby_hotels as search_osm_hotels,
 )
+from hotels.services.providers.base import UnsupportedBusinessCategoryError
 
 
 @override_settings(GOOGLE_MAPS_API_KEY='test-api-key')
@@ -481,28 +482,83 @@ class NearbyHotelsAPITests(APITestCase):
             'stars': None,
             'source': 'OpenStreetMap',
         }
-        mock_get_provider.return_value.search_nearby_hotels.return_value = [hotel]
+        mock_get_provider.return_value.search_nearby_businesses.return_value = [hotel]
 
         response = self.client.get(self.url, {
             'lat': '28.5562', 'lng': '77.1000', 'radius': '5000',
         })
 
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json(), {'count': 1, 'hotels': [hotel]})
-        mock_get_provider.return_value.search_nearby_hotels.assert_called_once_with(
+        self.assertEqual(response.json(), {
+            'count': 1,
+            'hotels': [hotel],
+            'category': 'hotels_resorts',
+            'category_display_name': 'Hotels & Resorts',
+        })
+        mock_get_provider.return_value.search_nearby_businesses.assert_called_once_with(
             latitude=28.5562,
             longitude=77.1,
             radius=5000.0,
+            category='hotels_resorts',
         )
 
     @patch('hotels.views.get_hotel_provider')
     def test_no_hotels(self, mock_get_provider):
-        mock_get_provider.return_value.search_nearby_hotels.return_value = []
+        mock_get_provider.return_value.search_nearby_businesses.return_value = []
         response = self.client.get(self.url, {
             'lat': 28.5562, 'lng': 77.1, 'radius': 5000,
         })
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json(), {'count': 0, 'hotels': []})
+        self.assertEqual(response.json()['hotels'], [])
+
+    @patch('hotels.views.get_hotel_provider')
+    def test_restaurants_category_is_forwarded(self, mock_get_provider):
+        mock_get_provider.return_value.search_nearby_businesses.return_value = []
+        response = self.client.get(self.url, {
+            'lat': 28.5562, 'lng': 77.1, 'radius': 2000,
+            'category': 'restaurants',
+        })
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['category_display_name'], 'Restaurants')
+        mock_get_provider.return_value.search_nearby_businesses.assert_called_once_with(
+            latitude=28.5562, longitude=77.1, radius=2000.0,
+            category='restaurants',
+        )
+
+    @patch('hotels.views.get_hotel_provider')
+    def test_hospitals_category_is_accepted(self, mock_get_provider):
+        mock_get_provider.return_value.search_nearby_businesses.return_value = []
+        response = self.client.get(self.url, {
+            'lat': 28.5562, 'lng': 77.1, 'radius': 2000,
+            'category': 'hospitals',
+        })
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['category'], 'hospitals')
+
+    @patch('hotels.views.get_hotel_provider')
+    def test_invalid_category_returns_400(self, mock_get_provider):
+        response = self.client.get(self.url, {
+            'lat': 28.5562, 'lng': 77.1, 'radius': 2000,
+            'category': 'invalid_category',
+        })
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('category', response.json())
+        mock_get_provider.assert_not_called()
+
+    @patch('hotels.views.get_hotel_provider')
+    def test_google_non_hotel_category_returns_clean_400(self, mock_get_provider):
+        mock_get_provider.return_value.search_nearby_businesses.side_effect = (
+            UnsupportedBusinessCategoryError(
+                'The selected business category is not yet supported by Google Places '
+                'in this version.'
+            )
+        )
+        response = self.client.get(self.url, {
+            'lat': 28.5562, 'lng': 77.1, 'radius': 2000,
+            'category': 'restaurants',
+        })
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('not yet supported by Google Places', response.json()['error'])
 
     def test_missing_lat(self):
         response = self.client.get(self.url, {'lng': 77.1, 'radius': 5000})
@@ -549,7 +605,7 @@ class NearbyHotelsAPITests(APITestCase):
 
     @patch('hotels.views.get_hotel_provider')
     def test_openstreetmap_error(self, mock_get_provider):
-        mock_get_provider.return_value.search_nearby_hotels.side_effect = OpenStreetMapError(
+        mock_get_provider.return_value.search_nearby_businesses.side_effect = OpenStreetMapError(
             'Overpass failed internally.'
         )
 
@@ -562,3 +618,24 @@ class NearbyHotelsAPITests(APITestCase):
             response.json(),
             {'error': 'Unable to retrieve hotel data at this time.'},
         )
+
+
+
+class BusinessCategoriesAPITests(APITestCase):
+    url = '/api/hotels/categories/'
+
+    def test_categories_endpoint_returns_ordered_display_data(self):
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, 200)
+        categories = response.json()['categories']
+        self.assertEqual(len(categories), 17)
+        self.assertEqual([item['id'] for item in categories], [
+            'hotels_resorts', 'cafes', 'restaurants', 'shopping_malls',
+            'hospitals', 'coworking_spaces', 'salons_spas', 'gyms_fitness',
+            'universities_colleges', 'schools', 'airports', 'retail',
+            'event_venues', 'banks', 'petrol_stations', 'pharmacies', 'hostels',
+        ])
+        self.assertEqual(categories[0], {
+            'id': 'hotels_resorts', 'name': 'Hotels & Resorts',
+        })
+        self.assertNotIn('osm_tags', categories[0])
