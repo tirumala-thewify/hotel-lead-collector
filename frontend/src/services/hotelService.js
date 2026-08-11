@@ -1,0 +1,175 @@
+const NEARBY_HOTELS_URL = 'http://127.0.0.1:8000/api/hotels/nearby/'
+const ENRICH_HOTEL_URL = 'http://127.0.0.1:8000/api/hotels/enrich/'
+const BULK_ENRICH_HOTELS_URL = 'http://127.0.0.1:8000/api/hotels/enrich/bulk/'
+const ENRICH_MANAGERS_URL = 'http://127.0.0.1:8000/api/hotels/enrich-managers/'
+const BULK_ENRICH_MANAGERS_URL = 'http://127.0.0.1:8000/api/hotels/enrich-managers/bulk/'
+
+export class HotelServiceError extends Error {
+  constructor(message, status = null) {
+    super(message)
+    this.name = 'HotelServiceError'
+    this.status = status
+  }
+}
+
+export async function fetchNearbyHotels(lat, lng, radius) {
+  const url = new URL(NEARBY_HOTELS_URL)
+  url.search = new URLSearchParams({ lat, lng, radius }).toString()
+
+  let response
+  try {
+    response = await fetch(url)
+  } catch {
+    throw new HotelServiceError(
+      'Cannot connect to the hotel API. Make sure the Django server is running.',
+    )
+  }
+
+  let data
+  try {
+    data = JSON.parse(await response.text())
+  } catch {
+    throw new HotelServiceError('The hotel API returned an invalid response.', response.status)
+  }
+
+  if (!response.ok) {
+    if (response.status === 400) {
+      throw new HotelServiceError('Please check the search values and try again.', 400)
+    }
+    throw new HotelServiceError(
+      data?.error || 'The hotel API could not complete the request.',
+      response.status,
+    )
+  }
+
+  if (!data || !Array.isArray(data.hotels) || typeof data.count !== 'number') {
+    throw new HotelServiceError('The hotel API returned an invalid response.', response.status)
+  }
+
+  return data
+}
+
+export async function enrichHotel(hotel) {
+  let response
+  try {
+    response = await fetch(ENRICH_HOTEL_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: hotel.name,
+        website: hotel.website,
+        address: hotel.address,
+        latitude: hotel.latitude,
+        longitude: hotel.longitude,
+        brand: hotel.brand,
+      }),
+    })
+  } catch {
+    throw new HotelServiceError(
+      'Cannot connect to the enrichment API. Make sure Django is running.',
+    )
+  }
+
+  let data
+  try {
+    data = JSON.parse(await response.text())
+  } catch {
+    throw new HotelServiceError('The enrichment API returned an invalid response.', response.status)
+  }
+  if (!response.ok) {
+    throw new HotelServiceError(
+      data?.message || 'Unable to enrich this hotel at this time.',
+      response.status,
+    )
+  }
+  return data
+}
+
+export async function freeEnrichHotelsBulk(hotels) {
+  let response
+  try {
+    response = await fetch(BULK_ENRICH_HOTELS_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ hotels }),
+    })
+  } catch {
+    throw new HotelServiceError('Cannot connect to the free enrichment API.')
+  }
+  let data
+  try {
+    data = JSON.parse(await response.text())
+  } catch {
+    throw new HotelServiceError('The free enrichment API returned an invalid response.', response.status)
+  }
+  if (!response.ok || !Array.isArray(data?.results)) {
+    throw new HotelServiceError(data?.message || 'Unable to free enrich these hotels.', response.status)
+  }
+  return data
+}
+
+export async function findHotelManagers(hotel) {
+  let response
+  try {
+    response = await fetch(ENRICH_MANAGERS_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: hotel.name,
+        website: hotel.website,
+        brand: hotel.brand,
+        location: hotel.address,
+      }),
+    })
+  } catch {
+    throw new HotelServiceError('Cannot connect to the manager enrichment API.')
+  }
+
+  let data
+  try {
+    data = JSON.parse(await response.text())
+  } catch {
+    throw new HotelServiceError('The manager enrichment API returned an invalid response.', response.status)
+  }
+  if (!response.ok) {
+    throw new HotelServiceError(
+      data?.message || 'Unable to search for managers at this time.',
+      response.status,
+    )
+  }
+  return data
+}
+
+export async function findManagersBulk(hotels) {
+  let response
+  try {
+    response = await fetch(BULK_ENRICH_MANAGERS_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        hotels: hotels.map((hotel) => ({
+          name: hotel.name,
+          website: hotel.website,
+          brand: hotel.brand,
+          address: hotel.address,
+        })),
+      }),
+    })
+  } catch {
+    throw new HotelServiceError('Cannot connect to the bulk manager enrichment API.')
+  }
+
+  let data
+  try {
+    data = JSON.parse(await response.text())
+  } catch {
+    throw new HotelServiceError('The bulk manager enrichment API returned an invalid response.', response.status)
+  }
+  if (!response.ok || !Array.isArray(data?.results)) {
+    throw new HotelServiceError(
+      data?.message || 'Unable to search for managers at this time.',
+      response.status,
+    )
+  }
+  return data
+}
