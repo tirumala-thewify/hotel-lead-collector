@@ -17,7 +17,9 @@ from hotels.services.openstreetmap import (
     REQUEST_TIMEOUT_SECONDS as OSM_TIMEOUT,
     USER_AGENT,
     OpenStreetMapError,
+    _build_overpass_query,
     calculate_distance_km,
+    search_nearby_businesses,
     search_nearby_hotels as search_osm_hotels,
 )
 
@@ -131,7 +133,10 @@ class OpenStreetMapServiceTests(SimpleTestCase):
         self.assertEqual(call.kwargs['headers'], {'User-Agent': USER_AGENT})
         self.assertEqual(call.kwargs['timeout'], OSM_TIMEOUT)
         query = call.kwargs['data']['data']
-        self.assertIn('nwr["tourism"="hotel"]', query)
+        self.assertIn('node["tourism"="hotel"]', query)
+        self.assertIn('way["tourism"="hotel"]', query)
+        self.assertIn('relation["tourism"="hotel"]', query)
+        self.assertIn('node["tourism"="resort"]', query)
         self.assertIn('out center tags;', query)
 
     @override_settings(OVERPASS_API_URLS=(
@@ -208,6 +213,69 @@ class OpenStreetMapServiceTests(SimpleTestCase):
         search_osm_hotels(19.09, 72.86, 3000)
         search_osm_hotels(19.10, 72.86, 2000)
         self.assertEqual(mock_post.call_count, 3)
+
+    @patch('hotels.services.openstreetmap.requests.post')
+    def test_cache_key_is_category_aware(self, mock_post):
+        mock_post.return_value = self._response([])
+        search_nearby_businesses(19.09, 72.86, 2000, 'restaurants')
+        search_nearby_businesses(19.09, 72.86, 2000, 'hotels_resorts')
+        self.assertEqual(mock_post.call_count, 2)
+
+        mock_post.reset_mock()
+        search_nearby_businesses(19.09, 72.86, 2000, 'restaurants')
+        self.assertEqual(mock_post.call_count, 0)
+
+    @patch('hotels.services.openstreetmap.requests.post')
+    def test_generic_restaurant_search_adds_category(self, mock_post):
+        mock_post.return_value = self._response([
+            {'type': 'node', 'id': 200, 'lat': 28.55, 'lon': 77.1,
+             'tags': {'amenity': 'restaurant', 'name': 'Test Restaurant'}},
+        ])
+        businesses = search_nearby_businesses(
+            28.5562, 77.1, 2000, category='restaurants'
+        )
+        self.assertEqual(businesses[0]['category'], 'restaurants')
+        query = mock_post.call_args.kwargs['data']['data']
+        for element_type in ('node', 'way', 'relation'):
+            self.assertIn(f'{element_type}["amenity"="restaurant"]', query)
+
+    @patch('hotels.services.openstreetmap.requests.post')
+    def test_invalid_category_fails_without_request(self, mock_post):
+        with self.assertRaisesMessage(OpenStreetMapError, 'invalid_category'):
+            search_nearby_businesses(28.5, 77.1, 2000, 'invalid_category')
+        mock_post.assert_not_called()
+
+    def test_multi_rule_and_retail_query_generation(self):
+        hotels_query = _build_overpass_query(1, 2, 1000, [
+            {'key': 'tourism', 'value': 'hotel'},
+            {'key': 'tourism', 'value': 'resort'},
+        ])
+        self.assertIn('["tourism"="hotel"]', hotels_query)
+        self.assertIn('["tourism"="resort"]', hotels_query)
+
+        education_query = _build_overpass_query(1, 2, 1000, [
+            {'key': 'amenity', 'value': 'university'},
+            {'key': 'amenity', 'value': 'college'},
+        ])
+        self.assertIn('["amenity"="university"]', education_query)
+        self.assertIn('["amenity"="college"]', education_query)
+
+        retail_query = _build_overpass_query(1, 2, 1000, [
+            {'key': 'shop', 'value': None, 'match': 'exists'},
+        ])
+        self.assertIn('["shop"]', retail_query)
+        self.assertNotIn('["shop"="*"]', retail_query)
+
+    @patch('hotels.services.openstreetmap.search_nearby_businesses')
+    def test_hotel_wrapper_uses_default_category(self, mock_search):
+        mock_search.return_value = [{'name': 'Hotel'}]
+        self.assertEqual(search_osm_hotels(1, 2, 1000), [{'name': 'Hotel'}])
+        mock_search.assert_called_once_with(
+            latitude=1,
+            longitude=2,
+            radius=1000,
+            category='hotels_resorts',
+        )
 
     @patch('hotels.services.openstreetmap.requests.post')
     def test_empty_elements_response(self, mock_post):

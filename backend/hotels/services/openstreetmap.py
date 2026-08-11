@@ -6,6 +6,8 @@ import requests
 from django.conf import settings
 from django.core.cache import cache
 
+from ..business_categories import get_business_category
+
 
 logger = logging.getLogger(__name__)
 
@@ -225,12 +227,26 @@ def _add_distances_and_sort(hotels, origin_latitude, origin_longitude):
     )
 
 
+def _build_overpass_query(latitude, longitude, radius, osm_tags):
+    statements = []
+    for rule in osm_tags:
+        key = rule['key']
+        if rule.get('match') == 'exists':
+            selector = f'["{key}"]'
+        else:
+            selector = f'["{key}"="{rule["value"]}"]'
+        for element_type in ('node', 'way', 'relation'):
+            statements.append(
+                f'  {element_type}{selector}'
+                f'(around:{radius:g},{latitude:g},{longitude:g});'
+            )
+    return '[out:json][timeout:25];\n(\n' + '\n'.join(statements) + '\n);\nout center tags;'
+
+
 def _build_query(latitude, longitude, radius):
-    return f'''[out:json][timeout:25];
-(
-  nwr["tourism"="hotel"](around:{radius:g},{latitude:g},{longitude:g});
-);
-out center tags;'''
+    """Backward-compatible hotel query builder."""
+    category = get_business_category('hotels_resorts')
+    return _build_overpass_query(latitude, longitude, radius, category['osm_tags'])
 
 
 def _configured_endpoints():
@@ -247,8 +263,11 @@ def _configured_endpoints():
     return unique[:2]
 
 
-def _cache_key(latitude, longitude, radius):
-    return f'hotel-search:osm:{latitude:.6f}:{longitude:.6f}:{radius:.2f}'
+def _cache_key(latitude, longitude, radius, category='hotels_resorts'):
+    return (
+        f'business-search:osm:{category}:'
+        f'{latitude:.6f}:{longitude:.6f}:{radius:.2f}'
+    )
 
 
 def _request_overpass(endpoint, query):
@@ -283,16 +302,24 @@ def _request_overpass(endpoint, query):
     return response
 
 
-def search_nearby_hotels(latitude, longitude, radius):
-    """Return normalized OSM hotels from one conservative Overpass request."""
+def search_nearby_businesses(
+    latitude, longitude, radius, category='hotels_resorts',
+):
+    """Return normalized OSM businesses for one trusted category."""
     latitude, longitude, radius = _validate_search(latitude, longitude, radius)
-    search_cache_key = _cache_key(latitude, longitude, radius)
-    cached_hotels = cache.get(search_cache_key)
-    if cached_hotels is not None:
-        logger.info('Hotel search served from cache.')
-        return cached_hotels
+    try:
+        category_config = get_business_category(category)
+    except ValueError as exc:
+        raise OpenStreetMapError(str(exc)) from exc
+    search_cache_key = _cache_key(latitude, longitude, radius, category)
+    cached_businesses = cache.get(search_cache_key)
+    if cached_businesses is not None:
+        logger.info('Business search served from cache for category %s.', category)
+        return cached_businesses
 
-    query = _build_query(latitude, longitude, radius)
+    query = _build_overpass_query(
+        latitude, longitude, radius, category_config['osm_tags']
+    )
     endpoints = _configured_endpoints()
     response = None
     last_error = None
@@ -327,22 +354,33 @@ def search_nearby_hotels(latitude, longitude, radius):
     if not isinstance(elements, list):
         raise OpenStreetMapError('The Overpass API response has invalid elements.')
 
-    hotels = []
+    businesses = []
     seen = set()
     for element in elements:
-        hotel = _normalize_element(element)
-        if hotel is None:
+        business = _normalize_element(element)
+        if business is None:
             logger.warning('Skipping a malformed OpenStreetMap element.')
             continue
-        key = (hotel['osm_type'], hotel['osm_id'])
+        key = (business['osm_type'], business['osm_id'])
         if key in seen:
             continue
         seen.add(key)
-        hotels.append(hotel)
-    hotels = _add_distances_and_sort(
-        _deduplicate_hotels(hotels),
+        business['category'] = category
+        businesses.append(business)
+    businesses = _add_distances_and_sort(
+        _deduplicate_hotels(businesses),
         origin_latitude=latitude,
         origin_longitude=longitude,
     )
-    cache.set(search_cache_key, hotels, CACHE_TIMEOUT_SECONDS)
-    return hotels
+    cache.set(search_cache_key, businesses, CACHE_TIMEOUT_SECONDS)
+    return businesses
+
+
+def search_nearby_hotels(latitude, longitude, radius):
+    """Backward-compatible Hotels & Resorts search wrapper."""
+    return search_nearby_businesses(
+        latitude=latitude,
+        longitude=longitude,
+        radius=radius,
+        category='hotels_resorts',
+    )
