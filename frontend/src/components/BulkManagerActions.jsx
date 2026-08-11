@@ -1,11 +1,11 @@
 import { useState } from 'react'
 
-const MAX_BULK_HOTELS = 10
+const MAX_BULK_BUSINESSES = 10
 
 function BulkManagerActions({ selectedHotels, providerSettings, running, summary, error, onRun }) {
   const [confirming, setConfirming] = useState(false)
   const count = selectedHotels.length
-  const tooMany = count > MAX_BULK_HOTELS
+  const tooMany = count > MAX_BULK_BUSINESSES
   const apolloEnabled = Boolean(providerSettings?.apollo_enabled)
   const apolloConfigured = Boolean(providerSettings?.apollo_configured)
   const canRun = count > 0 && !tooMany && apolloEnabled && apolloConfigured && !running
@@ -14,24 +14,30 @@ function BulkManagerActions({ selectedHotels, providerSettings, running, summary
     <>
       <div className="toolbar-action">
           <button type="button" className="bulk-manager-button" disabled={!canRun} onClick={() => setConfirming(true)}>
-            {running ? 'Finding...' : 'Find Managers'}
+            {running ? 'Finding decision-makers...' : 'Find Decision Makers'}
           </button>
-          <span className="action-note">{tooMany ? 'Maximum 10 hotels' : !apolloEnabled || !apolloConfigured ? 'Apollo not configured' : error}</span>
+          <span className="action-note">{tooMany
+            ? 'Maximum 10 businesses'
+            : !apolloEnabled
+              ? 'Apollo is disabled in Settings.'
+              : !apolloConfigured
+                ? 'Apollo API key is not configured.'
+                : error}</span>
       </div>
       {summary && (
         <div className="bulk-summary" role="status">
-          <strong>{summary.processed} hotels processed</strong>
-          <span>{summary.found} had manager contacts</span>
-          <span>{summary.not_found} had no matching contacts</span>
-          <span>{summary.errors} failed</span>
+          <strong>Processed: {summary.processed}</strong>
+          <span>Found: {summary.found}</span>
+          <span>Not found: {summary.not_found}</span>
+          <span>Errors: {summary.errors}</span>
         </div>
       )}
       {confirming && (
         <div className="confirmation-backdrop" role="presentation">
           <section className="confirmation-dialog" role="dialog" aria-modal="true" aria-labelledby="bulk-confirm-title">
-            <h2 id="bulk-confirm-title">Confirm Apollo search</h2>
-            <p>You are about to search manager contacts for {count} {count === 1 ? 'hotel' : 'hotels'} using Apollo.</p>
-            <p>This may consume Apollo credits.</p>
+            <h2 id="bulk-confirm-title">Find Decision Makers</h2>
+            <p>Find decision-makers for {count} selected {count === 1 ? 'business' : 'businesses'}?</p>
+            <p>Some Apollo enrichment requests may consume credits.</p>
             <div className="confirmation-actions">
               <button type="button" onClick={() => setConfirming(false)}>Cancel</button>
               <button type="button" className="bulk-manager-button" onClick={() => { setConfirming(false); onRun() }}>

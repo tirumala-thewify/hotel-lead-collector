@@ -13,13 +13,40 @@ import {
   enrichHotel,
   fetchBusinessCategories,
   fetchNearbyHotels,
-  findHotelManagers,
-  findManagersBulk,
+  findDecisionMakers,
+  findDecisionMakersBulk,
   freeEnrichHotelsBulk,
   HotelServiceError,
 } from './services/hotelService.js'
 import './index.css'
 import { fetchProviderSettings } from './services/providerSettingsService.js'
+
+function decisionMakerKey(contact) {
+  return contact.id || [
+    contact.name,
+    contact.title,
+    contact.organization_name || contact.company,
+  ].map((value) => String(value || '').trim().toLowerCase()).join('|')
+}
+
+function normalizeDecisionMakers(contacts) {
+  const unique = new Map()
+  for (const contact of Array.isArray(contacts) ? contacts : []) {
+    if (!contact || typeof contact !== 'object') continue
+    const key = decisionMakerKey(contact)
+    if (!unique.has(key)) unique.set(key, contact)
+    if (unique.size === 3) break
+  }
+  return [...unique.values()]
+}
+
+function decisionMakerMessage(status) {
+  if (status === 'FOUND') return 'Decision-makers found.'
+  if (status === 'PARTIAL') return 'Partial decision-maker information found.'
+  if (status === 'NOT_FOUND') return 'No matching decision-makers found.'
+  if (status === 'DISABLED') return 'Apollo is disabled in Settings.'
+  return 'Unable to retrieve decision-maker information.'
+}
 
 function App() {
   const defaultCategories = [{ id: 'hotels_resorts', name: 'Hotels & Resorts' }]
@@ -68,7 +95,10 @@ function App() {
 
     try {
       const data = await fetchNearbyHotels(lat, lng, radius, selectedCategory)
-      setHotels(data.hotels)
+      setHotels(data.hotels.map((business) => ({
+        ...business,
+        category: business.category || data.category || selectedCategory,
+      })))
       setSelectedHotelKeys([])
       setBulkManagerSummary(null)
       setFreeEnrichmentSummary(null)
@@ -131,28 +161,34 @@ function App() {
   }
 
   const handleFindManagers = async (hotel) => {
-    if (selectedCategory !== 'hotels_resorts') return
+    if (!providerSettings?.apollo_enabled || !providerSettings?.apollo_configured) return
     const key = hotel.id || hotel.place_id || `${hotel.osm_type}-${hotel.osm_id}`
     if (managerSearches[key]) return
     setManagerSearches((current) => ({ ...current, [key]: true }))
     try {
-      const result = await findHotelManagers(hotel)
+      const result = await findDecisionMakers(hotel)
+      const contacts = normalizeDecisionMakers(result.contacts)
       setHotels((current) => current.map((item) => (
         (item.id || item.place_id || `${item.osm_type}-${item.osm_id}`) === key
           ? {
               ...item,
-              manager_contacts: result.contacts,
+              decision_makers: contacts,
+              manager_contacts: contacts,
               manager_status: result.status,
-              manager_message: result.contacts.length
-                ? ''
-                : 'No matching decision-makers were found.',
+              manager_message: decisionMakerMessage(result.status),
             }
           : item
       )))
-    } catch (managerError) {
+    } catch {
       setHotels((current) => current.map((item) => (
         (item.id || item.place_id || `${item.osm_type}-${item.osm_id}`) === key
-          ? { ...item, manager_contacts: [], manager_status: 'ERROR', manager_message: managerError.message }
+          ? {
+              ...item,
+              decision_makers: [],
+              manager_contacts: [],
+              manager_status: 'ERROR',
+              manager_message: 'Unable to retrieve decision-maker information.',
+            }
           : item
       )))
     } finally {
@@ -175,29 +211,37 @@ function App() {
   }
 
   const handleBulkManagers = async () => {
-    if (selectedCategory !== 'hotels_resorts') return
+    if (!providerSettings?.apollo_enabled || !providerSettings?.apollo_configured) return
     if (!selectedHotels.length || selectedHotels.length > 10 || bulkManagerRunning) return
     setBulkManagerRunning(true)
     setBulkManagerError('')
     setBulkManagerSummary(null)
     try {
-      const data = await findManagersBulk(selectedHotels)
-      const resultsByName = new Map(data.results.map((result) => [result.hotel_name, result]))
+      const data = await findDecisionMakersBulk(selectedHotels)
+      const resultsByIdentity = new Map()
+      for (const result of data.results) {
+        const identity = `${result.business_name || result.hotel_name}|${result.category || 'hotels_resorts'}`
+        const matches = resultsByIdentity.get(identity) || []
+        matches.push(result)
+        resultsByIdentity.set(identity, matches)
+      }
       setHotels((current) => current.map((hotel) => {
-        const result = resultsByName.get(hotel.name)
-        if (!result || !selectedHotelKeys.includes(hotelKey(hotel))) return hotel
+        if (!selectedHotelKeys.includes(hotelKey(hotel))) return hotel
+        const identity = `${hotel.name}|${hotel.category || 'hotels_resorts'}`
+        const result = resultsByIdentity.get(identity)?.shift()
+        if (!result) return hotel
+        const contacts = normalizeDecisionMakers(result.contacts)
         return {
           ...hotel,
-          manager_contacts: result.contacts,
+          decision_makers: contacts,
+          manager_contacts: contacts,
           manager_status: result.status,
-          manager_message: result.status === 'ERROR'
-            ? 'Manager search failed for this hotel.'
-            : result.contacts.length ? '' : 'No matching decision-makers were found.',
+          manager_message: decisionMakerMessage(result.status),
         }
       }))
       setBulkManagerSummary(data.summary)
-    } catch (bulkError) {
-      setBulkManagerError(bulkError.message)
+    } catch {
+      setBulkManagerError('Unable to retrieve decision-maker information.')
     } finally {
       setBulkManagerRunning(false)
     }
@@ -295,14 +339,13 @@ function App() {
         {!loading && !error && hasSearched && hotels.length > 0 && (
           <>
             <ResultsToolbar count={hotels.length} selectedCount={selectedHotels.length} allSelected={selectedHotels.length === hotels.length} onSelectAll={handleSelectAll} onClear={() => setSelectedHotelKeys([])} categoryName={categories.find((category) => category.id === selectedCategory)?.name || 'Businesses'}>
-            {selectedCategory === 'hotels_resorts' ? <>
-            <FreeEnrichmentActions
+            {selectedCategory === 'hotels_resorts' && <FreeEnrichmentActions
               selectedHotels={selectedHotels}
               running={freeEnrichmentRunning}
               summary={freeEnrichmentSummary}
               error={freeEnrichmentError}
               onRun={handleBulkFreeEnrichment}
-            />
+            />}
             <BulkManagerActions
               selectedHotels={selectedHotels}
               providerSettings={providerSettings}
@@ -311,7 +354,7 @@ function App() {
               error={bulkManagerError}
               onRun={handleBulkManagers}
             />
-            </> : <span className="action-note enrichment-limitation">Business enrichment for this category will be added in a later phase.</span>}
+            {selectedCategory !== 'hotels_resorts' && <span className="action-note enrichment-limitation">Business contact enrichment for this category will be added in a later phase.</span>}
             <ExportButtons hotels={hotels} context={{ location: selectedLocationName, latitude: Number(searchValues.lat), longitude: Number(searchValues.lng), radius: Number(searchValues.radius), provider: providerName }} />
             </ResultsToolbar>
             <HotelTable
@@ -325,7 +368,7 @@ function App() {
           </>
         )}
       </section>
-      <HotelDetailsDrawer hotel={drawerHotel} onClose={() => setDrawerHotelKey(null)} onEnrich={handleEnrich} onFindManagers={handleFindManagers} enriching={drawerHotel ? Boolean(enrichingHotels[hotelKey(drawerHotel)]) : false} findingManagers={drawerHotel ? Boolean(managerSearches[hotelKey(drawerHotel)]) : false} managerAvailable={Boolean(providerSettings?.apollo_enabled && providerSettings?.apollo_configured)} enrichmentAvailable={selectedCategory === 'hotels_resorts'} />
+      <HotelDetailsDrawer hotel={drawerHotel} categoryName={categories.find((category) => category.id === selectedCategory)?.name || 'Business'} onClose={() => setDrawerHotelKey(null)} onEnrich={handleEnrich} onFindManagers={handleFindManagers} enriching={drawerHotel ? Boolean(enrichingHotels[hotelKey(drawerHotel)]) : false} findingManagers={drawerHotel ? Boolean(managerSearches[hotelKey(drawerHotel)]) : false} apolloEnabled={Boolean(providerSettings?.apollo_enabled)} apolloConfigured={Boolean(providerSettings?.apollo_configured)} enrichmentAvailable={selectedCategory === 'hotels_resorts'} />
     </main>
   )
 }

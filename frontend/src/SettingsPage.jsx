@@ -96,8 +96,8 @@ function SettingsPage() {
       <section className="settings-card">
         <div className="settings-card-heading">
           <div><span className="section-kicker">People enrichment</span><h2>Apollo</h2><p>Optional decision-maker searches.</p></div>
-          <span className={`configured-badge ${settings.apollo_configured ? 'is-configured' : ''}`}>
-            Apollo {settings.apollo_configured ? 'configured' : 'not configured'}
+          <span className={`configured-badge ${settings.apollo_enabled && settings.apollo_configured ? 'is-configured' : ''}`}>
+            Apollo {!settings.apollo_enabled ? 'disabled' : settings.apollo_configured ? 'configured' : 'not configured'}
           </span>
         </div>
         <label className="toggle-row">
