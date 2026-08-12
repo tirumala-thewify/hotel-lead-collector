@@ -48,16 +48,15 @@ class HotelWebsiteEnrichmentTests(SimpleTestCase):
         mock_get.assert_called_once()
 
     @patch('hotels.services.enrichment.hotel_website.requests.get')
-    def test_maximum_three_page_limit(self, mock_get, mock_dns):
+    def test_maximum_five_page_limit(self, mock_get, mock_dns):
         home = '''
-          <a href="/contact">Contact</a><a href="/reach-us">Reach us</a>
-          <a href="/location">Location</a><a href="/about">About</a>
+          <a href="/contact">Contact</a><a href="/about">About</a>
+          <a href="/team">Team</a><a href="/leadership">Leadership</a>
+          <a href="/management">Management</a><a href="/sales">Sales</a>
         '''
-        mock_get.side_effect = [
-            html_response(home), html_response('<p>Contact</p>'), html_response('<p>Reach</p>')
-        ]
+        mock_get.side_effect = [html_response(home)] + [html_response('<p>Page</p>')] * 4
         enrich_hotel_from_website(self.hotel)
-        self.assertEqual(mock_get.call_count, 3)
+        self.assertEqual(mock_get.call_count, 5)
 
     @patch('hotels.services.enrichment.hotel_website.requests.get')
     def test_secondary_404_preserves_homepage_data(self, mock_get, mock_dns):
@@ -118,9 +117,7 @@ class HotelWebsiteEnrichmentTests(SimpleTestCase):
           <a href="/information/legal/internet-sales-conditions.en.shtml">Terms</a>
           <a href="/legal/sales-conditions">Sales conditions</a>
         '''
-        mock_get.side_effect = [
-            html_response(home), html_response(''), html_response(''),
-        ]
+        mock_get.side_effect = [html_response(home)] + [html_response('')] * 3
         result = enrich_hotel_from_website(self.hotel)
         self.assertEqual(result['discovered_pages']['sales'], 'https://hotel.example/sales')
         self.assertNotIn('conditions', result['discovered_pages']['sales'])
@@ -161,7 +158,7 @@ class HotelWebsiteEnrichmentTests(SimpleTestCase):
           <a href="/management">Management</a><a href="/sales">Sales</a>
           <a href="/news">News</a>
         '''
-        mock_get.side_effect = [html_response(home), html_response(''), html_response('')]
+        mock_get.side_effect = [html_response(home)] + [html_response('')] * 4
         result = enrich_hotel_from_website(self.hotel)
         self.assertEqual(result['discovered_pages'], {
             'contact': 'https://hotel.example/contact-us',
@@ -172,7 +169,7 @@ class HotelWebsiteEnrichmentTests(SimpleTestCase):
             'sales': 'https://hotel.example/sales',
             'press': 'https://hotel.example/news',
         })
-        self.assertEqual(mock_get.call_count, 3)
+        self.assertEqual(mock_get.call_count, 5)
 
     @patch('hotels.services.enrichment.hotel_website.requests.get')
     def test_social_profiles_found_and_source_tracked(self, mock_get, mock_dns):
@@ -406,6 +403,39 @@ class HotelWebsiteEnrichmentTests(SimpleTestCase):
         with self.assertRaisesMessage(EnrichmentError, 'Local and private'):
             enrich_hotel_from_website(self.hotel)
         mock_get.assert_called_once()
+
+
+    @patch('hotels.services.enrichment.hotel_website.requests.get')
+    def test_all_business_contacts_are_deduplicated_with_sources(self, mock_get, mock_dns):
+        mock_get.return_value = html_response('''
+          <a href="mailto:info@hotel.example">Info</a>
+          <a href="mailto:INFO@hotel.example">Info duplicate</a>
+          <a href="mailto:sales@hotel.example">Sales</a>
+          <a href="mailto:privacy@hotel.example">Privacy</a>
+          <a href="mailto:test@example.com">Placeholder</a>
+          <a href="tel:+91 12345 67890">Call</a>
+          Phone: +91 12345 67890
+        ''')
+        result = enrich_hotel_from_website(self.hotel)
+        self.assertEqual(
+            [(item['email'], item['type']) for item in result['business_emails']],
+            [('info@hotel.example', 'general'), ('sales@hotel.example', 'sales')],
+        )
+        self.assertEqual(len(result['business_phones']), 1)
+        self.assertEqual(result['business_phones'][0]['source_url'], 'https://hotel.example/')
+
+    @patch('hotels.services.enrichment.hotel_website.requests.get')
+    def test_existing_scalar_fields_and_additive_schema_remain_compatible(self, mock_get, mock_dns):
+        mock_get.return_value = html_response(
+            '<a href="mailto:reservations@hotel.example">Book</a>'
+            '<a href="tel:+1 212 555 0100">Call</a>'
+        )
+        result = enrich_hotel_from_website(self.hotel)
+        self.assertEqual(result['email'], 'reservations@hotel.example')
+        self.assertEqual(result['phone'], '+1 212 555 0100')
+        self.assertIn('business_emails', result)
+        self.assertIn('business_phones', result)
+        self.assertIn('decision_makers', result)
 
 
 class HotelEnrichmentAPITests(APITestCase):

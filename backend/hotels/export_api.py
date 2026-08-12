@@ -17,6 +17,24 @@ class ManagerContactSerializer(serializers.Serializer):
     email = serializers.CharField(required=False, allow_blank=True, allow_null=True)
     phone = serializers.CharField(required=False, allow_blank=True, allow_null=True)
     linkedin_url = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    role_group = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    source = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    source_url = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    confidence = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    business_email = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+
+
+class BusinessEmailSerializer(serializers.Serializer):
+    email = serializers.EmailField()
+    type = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    source_url = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+
+
+class BusinessPhoneSerializer(serializers.Serializer):
+    phone = serializers.CharField()
+    normalized = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    type = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    source_url = serializers.CharField(required=False, allow_blank=True, allow_null=True)
 
 
 class ExportHotelSerializer(serializers.Serializer):
@@ -34,6 +52,11 @@ class ExportHotelSerializer(serializers.Serializer):
     enrichment_status = serializers.CharField(required=False, allow_blank=True, allow_null=True)
     enrichment_sources = serializers.DictField(required=False)
     manager_contacts = ManagerContactSerializer(many=True, required=False)
+    decision_makers = ManagerContactSerializer(many=True, required=False)
+    business_emails = BusinessEmailSerializer(many=True, required=False)
+    business_phones = BusinessPhoneSerializer(many=True, required=False)
+    social_profiles = serializers.DictField(required=False)
+    social_profile_sources = serializers.DictField(required=False)
 
 
 class SearchContextSerializer(serializers.Serializer):

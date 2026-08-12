@@ -14,27 +14,25 @@ from .website_discovery import discover_official_website
 USER_AGENT = 'HotelLeadCollector/0.1 (+hotel contact enrichment)'
 REQUEST_TIMEOUT_SECONDS = 10
 MAX_REDIRECTS = 3
-MAX_PAGES = 3
+MAX_PAGES = 5
 MAX_RESPONSE_BYTES = 1_000_000
 PAGE_LINK_MARKERS = {
     'contact': ('contact', 'contact-us', 'contact us', 'reach-us', 'reach us',
-                'location', 'hotel-info', 'hotel info', 'reservations'),
+                'location', 'hotel-info', 'hotel info', 'property-info',
+                'property info', 'reservations', 'booking', 'bookings'),
     'about': ('about', 'about-us', 'about us', 'corporate'),
     'team': ('team', 'our-team', 'our team'),
     'leadership': ('leadership', 'executive', 'executives'),
     'management': ('management', 'managers'),
     'sales': (
         'sales', 'sales-team', 'corporate-sales', 'group-sales', 'meetings-sales',
-        'events-sales', 'business-sales', 'contact-sales',
+        'events-sales', 'business-sales', 'contact-sales', 'meetings', 'events',
     ),
     'press': ('press', 'news', 'media'),
 }
-CONTACT_LINK_MARKERS = tuple(
-    marker for markers in PAGE_LINK_MARKERS.values() for marker in markers
-)
 SALES_NEGATIVE_MARKERS = (
     'terms', 'conditions', 'terms and conditions', 'legal', 'policy', 'privacy',
-    'sales conditions', 'internet sales conditions',
+    'sales conditions', 'internet sales conditions', 'activities and events',
 )
 SOCIAL_DOMAINS = {
     'linkedin': 'linkedin.com',
@@ -55,6 +53,8 @@ SOCIAL_ALLOWED_PATH_PREFIXES = {
 BUSINESS_EMAIL_PREFIXES = {
     'info', 'reservations', 'reservation', 'sales', 'contact', 'frontoffice',
     'frontdesk', 'reception', 'booking', 'bookings', 'enquiries', 'inquiries',
+    'events', 'event', 'marketing', 'corporate', 'management', 'manager', 'gm',
+    'support',
 }
 EMAIL_PATTERN = re.compile(r'[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}', re.IGNORECASE)
 LABELLED_PHONE_PATTERN = re.compile(
@@ -64,7 +64,21 @@ LABELLED_PHONE_PATTERN = re.compile(
 )
 ENRICHED_FIELDS = ('phone', 'email', 'address', 'brand')
 CORE_CONTACT_FIELDS = ('phone', 'email', 'address')
-REJECTED_EMAIL_PREFIXES = {'privacy', 'legal', 'webmaster', 'developer', 'support'}
+REJECTED_EMAIL_PREFIXES = {'privacy', 'legal', 'webmaster', 'developer'}
+REJECTED_EMAIL_DOMAINS = {
+    'example.com', 'example.org', 'example.net', 'wixpress.com', 'sentry.io',
+}
+EMAIL_TYPE_PREFIXES = {
+    'sales': {'sales', 'groupsales', 'group.sales', 'corporatesales', 'events'},
+    'reservations': {'reservations', 'reservation', 'booking', 'bookings'},
+    'front_desk': {'frontdesk', 'front.desk', 'frontoffice', 'reception'},
+    'general': {'info', 'contact', 'enquiries', 'inquiries'},
+    'management': {'management', 'manager', 'gm'},
+    'events': {'events', 'event'},
+    'marketing': {'marketing'},
+    'support': {'support'},
+    'corporate': {'corporate'},
+}
 
 
 class ContactPageParser(HTMLParser):
@@ -241,13 +255,16 @@ def _business_email(value, allowed_domain=None, allow_domain_email=False):
     if not EMAIL_PATTERN.fullmatch(value):
         return None
     local_part, domain = value.rsplit('@', 1)
+    if domain in REJECTED_EMAIL_DOMAINS:
+        return None
     if local_part in REJECTED_EMAIL_PREFIXES:
         return None
     if local_part in BUSINESS_EMAIL_PREFIXES:
         return value
     if allow_domain_email and allowed_domain:
         allowed_domain = allowed_domain.removeprefix('www.').lower()
-        if domain == allowed_domain or domain.endswith(f'.{allowed_domain}'):
+        if (domain == allowed_domain or domain.endswith(f'.{allowed_domain}')
+                or allowed_domain.endswith(f'.{domain}')):
             return value
     return None
 
@@ -315,6 +332,23 @@ def _extract_contacts(html, allowed_domain=None, allow_domain_email=False):
             if (email := _business_email(value, allowed_domain, allow_domain_email))),
             None,
         )
+    result['business_emails'] = _all_business_emails(
+        parser, allowed_domain, allow_domain_email
+    )
+    result['business_phones'] = _all_business_phones(parser, visible_text)
+    accepted_email = _business_email(
+        result['email'] or '', allowed_domain, allow_domain_email
+    )
+    if accepted_email:
+        result['email'] = accepted_email
+        if accepted_email.casefold() not in {
+            value.casefold() for value in result['business_emails']
+        }:
+            result['business_emails'].insert(0, accepted_email)
+    if result['phone']:
+        normalized = _normalize_phone(result['phone'])
+        if normalized and normalized not in {item[1] for item in result['business_phones']}:
+            result['business_phones'].insert(0, (result['phone'], normalized))
     return result, parser.links
 
 
@@ -340,6 +374,60 @@ def _page_category(path, anchor_text):
     return None
 
 
+def _email_type(value):
+    local_part = value.rsplit('@', 1)[0].casefold()
+    for contact_type, prefixes in EMAIL_TYPE_PREFIXES.items():
+        if any(local_part == prefix or local_part.startswith(f'{prefix}.')
+               or local_part.startswith(f'{prefix}-')
+               or local_part.startswith(f'{prefix}_') for prefix in prefixes):
+            return contact_type
+    if re.fullmatch(r'[a-z][a-z._-]*[._-][a-z][a-z._-]*', local_part):
+        return 'person'
+    return 'unknown'
+
+
+def _all_business_emails(parser, allowed_domain=None, allow_domain_email=False):
+    values = [*parser.mailto, *EMAIL_PATTERN.findall(' '.join(parser.visible_text))]
+    emails = []
+    for value in values:
+        email = _business_email(value, allowed_domain, allow_domain_email)
+        if email and email.casefold() not in {item.casefold() for item in emails}:
+            emails.append(email)
+    return emails
+
+
+def _normalize_phone(value):
+    value = ' '.join(str(value).strip().split())
+    digits = re.sub(r'\D', '', value)
+    if len(digits) < 7 or len(digits) > 15:
+        return None
+    return f'+{digits}' if value.startswith('+') else digits
+
+
+def _all_business_phones(parser, visible_text):
+    values = [*parser.tel]
+    values.extend(match.group(1) for match in LABELLED_PHONE_PATTERN.finditer(visible_text))
+    phones = []
+    seen = set()
+    for value in values:
+        normalized = _normalize_phone(value)
+        if normalized and normalized not in seen:
+            seen.add(normalized)
+            phones.append((' '.join(value.strip().split()), normalized))
+    return phones
+
+
+def _phone_type(source_url):
+    path = re.sub(r'[^a-z0-9]+', ' ', urlparse(source_url).path.casefold())
+    if 'sales' in path or 'events' in path or 'meetings' in path:
+        return 'events' if 'events' in path or 'meetings' in path else 'sales'
+    if 'reservation' in path or 'booking' in path:
+        return 'reservations'
+    if 'management' in path or 'leadership' in path or 'team' in path:
+        return 'management'
+    return 'general'
+
+
 def _discover_pages(base_url, links):
     base_host = (urlparse(base_url).hostname or '').lower()
     candidates = []
@@ -353,9 +441,9 @@ def _discover_pages(base_url, links):
         if not category:
             continue
         normalized = urlunparse(parsed._replace(fragment=''))
-        discovered[category] = discovered[category] or normalized
-        priority = list(PAGE_LINK_MARKERS).index(category)
-        if all(candidate[1] != normalized for candidate in candidates):
+        if not discovered[category]:
+            discovered[category] = normalized
+            priority = list(PAGE_LINK_MARKERS).index(category)
             candidates.append((priority, normalized))
     candidates.sort(key=lambda candidate: candidate[0])
     return discovered, [url for _, url in candidates[: MAX_PAGES - 1]]
@@ -429,6 +517,9 @@ class HotelWebsiteEnrichmentProvider(HotelEnrichmentProvider):
                 'discovered_pages': {category: None for category in PAGE_LINK_MARKERS},
                 'social_profiles': {platform: None for platform in SOCIAL_DOMAINS},
                 'social_profile_sources': {platform: None for platform in SOCIAL_DOMAINS},
+                'business_emails': [],
+                'business_phones': [],
+                'decision_makers': [],
                 'sources': {'website': None, 'phone': None, 'email': None, 'address': None, 'brand': None},
                 'website_confidence': discovery.get('confidence'),
                 'status': 'NOT_FOUND',
@@ -447,6 +538,9 @@ class HotelWebsiteEnrichmentProvider(HotelEnrichmentProvider):
             'discovered_pages': {category: None for category in PAGE_LINK_MARKERS},
             'social_profiles': {platform: None for platform in SOCIAL_DOMAINS},
             'social_profile_sources': {platform: None for platform in SOCIAL_DOMAINS},
+            'business_emails': [],
+            'business_phones': [],
+            'decision_makers': [],
             'sources': {
                 'website': discovery['source'],
                 'phone': None,
@@ -472,16 +566,30 @@ class HotelWebsiteEnrichmentProvider(HotelEnrichmentProvider):
                 continue
 
         for source_url, html in pages:
-            page_path = urlparse(source_url).path.lower()
-            is_contact_page = any(
-                marker.replace(' ', '-') in page_path.replace('_', '-')
-                for marker in CONTACT_LINK_MARKERS
-            )
             contacts, links = _extract_contacts(
                 html,
                 allowed_domain=website_domain,
-                allow_domain_email=is_contact_page,
+                allow_domain_email=True,
             )
+            for email in contacts['business_emails']:
+                if email.casefold() not in {
+                    item['email'].casefold() for item in result['business_emails']
+                }:
+                    result['business_emails'].append({
+                        'email': email,
+                        'type': _email_type(email),
+                        'source_url': source_url,
+                    })
+            for phone, normalized in contacts['business_phones']:
+                if normalized not in {
+                    item['normalized'] for item in result['business_phones']
+                }:
+                    result['business_phones'].append({
+                        'phone': phone,
+                        'normalized': normalized,
+                        'type': _phone_type(source_url),
+                        'source_url': source_url,
+                    })
             found_on_page = False
             for field in ENRICHED_FIELDS:
                 if not result[field] and contacts[field]:
@@ -497,6 +605,21 @@ class HotelWebsiteEnrichmentProvider(HotelEnrichmentProvider):
             if found_on_page:
                 if source_url not in result['source_urls']:
                     result['source_urls'].append(source_url)
+
+        # Parse the bounded pages already fetched above; no additional requests
+        # are made for decision-maker extraction.
+        from hotels.services.people_enrichment.official_website import (
+            _deduplicate_contacts, extract_official_website_contacts,
+        )
+        decision_makers = []
+        for source_url, html in pages:
+            for contact in extract_official_website_contacts(
+                html, source_url, website_domain
+            ):
+                contact['organization_name'] = hotel.get('name')
+                contact['company'] = hotel.get('name')
+                decision_makers.append(contact)
+        result['decision_makers'] = _deduplicate_contacts(decision_makers)
 
         found_count = sum(bool(result[field]) for field in CORE_CONTACT_FIELDS)
         if found_count == len(CORE_CONTACT_FIELDS):

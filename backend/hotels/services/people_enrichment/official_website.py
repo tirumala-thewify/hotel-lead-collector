@@ -4,6 +4,7 @@ from urllib.parse import urlparse
 
 from hotels.services.enrichment.base import EnrichmentError
 from hotels.services.enrichment.hotel_website import (
+    BUSINESS_EMAIL_PREFIXES,
     EMAIL_PATTERN,
     MAX_PAGES,
     SALES_NEGATIVE_MARKERS,
@@ -19,12 +20,30 @@ from .base import PeopleEnrichmentError, PeopleEnrichmentProvider
 
 
 SOURCE = 'Official Website'
-MAX_CONTACTS = 3
+MAX_CONTACTS = 10
 PAGE_PRIORITY = ('team', 'leadership', 'management', 'sales', 'press', 'about', 'contact')
 HIGH_CONFIDENCE_PAGES = {'team', 'leadership', 'management'}
 
 TITLE_PATTERNS = (
+    ('it_leadership', 'Director of Information Technology', r'Director of Information Technology'),
+    ('it_leadership', 'Head of Information Technology', r'Head of Information Technology'),
+    ('it_leadership', 'IT Director', r'IT Director'),
+    ('it_leadership', 'Director of IT', r'Director of IT'),
+    ('it_leadership', 'Head of IT', r'Head of IT'),
+    ('it_management', 'IT Infrastructure Manager', r'IT Infrastructure Manager'),
+    ('it_management', 'Infrastructure Manager', r'Infrastructure Manager'),
+    ('it_management', 'Information Technology Manager', r'Information Technology Manager'),
+    ('it_management', 'IT Manager', r'IT Manager'),
+    ('executive', 'Chief Information Officer', r'Chief Information Officer'),
+    ('executive', 'Chief Technology Officer', r'Chief Technology Officer'),
+    ('executive', 'CIO', r'CIO'),
+    ('executive', 'CTO', r'CTO'),
+    ('general_manager', 'Hotel General Manager', r'Hotel General Manager'),
     ('general_manager', 'General Manager', r'General Manager'),
+    ('operations', 'Director of Operations', r'Director of Operations'),
+    ('operations', 'Operations Director', r'Operations Director'),
+    ('operations', 'Head of Operations', r'Head of Operations'),
+    ('operations', 'Operations Manager', r'Operations Manager'),
     ('sales', 'Director of Sales', r'Director of Sales'),
     ('sales', 'Sales Director', r'Sales Director'),
     ('sales', 'Head of Sales', r'Head of Sales'),
@@ -121,6 +140,14 @@ def _line_email(line, website_domain):
     ), None)
 
 
+def _person_email(line, website_domain):
+    email = _line_email(line, website_domain)
+    if not email:
+        return None
+    local_part = email.rsplit('@', 1)[0].casefold()
+    return None if local_part in BUSINESS_EMAIL_PREFIXES else email
+
+
 def _line_phone(line):
     labelled = re.search(r'PHONE:([^\s]+(?:\s[^A-Za-z\s][^\s]*)*)', line, re.IGNORECASE)
     if labelled:
@@ -137,7 +164,14 @@ def _contact(name, title, role_group, source_url, email=None, phone=None):
         'name': name,
         'title': title,
         'role_group': role_group,
-        'department': 'General Management' if role_group == 'general_manager' else 'Sales',
+        'department': {
+            'it_leadership': 'Information Technology',
+            'it_management': 'Information Technology',
+            'general_manager': 'General Management',
+            'executive': 'Executive Leadership',
+            'operations': 'Operations',
+            'sales': 'Sales',
+        }[role_group],
         'organization_name': None,
         'company': None,
         'business_email': email,
@@ -176,7 +210,7 @@ def extract_official_website_contacts(html, source_url, website_domain):
             name = ' '.join(part.capitalize() for part in match.group('name').split())
             contacts.append(_contact(
                 name, title, role_group, source_url,
-                email=_line_email(line, website_domain), phone=_line_phone(line),
+                email=_person_email(line, website_domain), phone=_line_phone(line),
             ))
             break
 
@@ -207,7 +241,10 @@ def _deduplicate_contacts(contacts):
                 existing['source_url'] = contact['source_url']
             continue
         deduplicated.append({**contact, '_key': key})
-    rank = {'general_manager': 0, 'sales': 1}
+    rank = {
+        'it_leadership': 0, 'it_management': 1, 'general_manager': 2,
+        'executive': 3, 'operations': 4, 'sales': 5,
+    }
     deduplicated.sort(key=lambda item: (rank[item['role_group']], item['title'], item['name'] or ''))
     for contact in deduplicated:
         contact.pop('_key', None)

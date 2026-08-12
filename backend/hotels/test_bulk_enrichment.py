@@ -66,6 +66,11 @@ class BulkHotelEnrichmentAPITests(APITestCase):
                 'facebook': None, 'instagram': None,
             },
             'discovered_pages': {'contact': 'https://hotel.example/contact'},
+            'business_emails': [{'email': 'info@hotel.example', 'type': 'general',
+                                 'source_url': 'https://hotel.example/contact'}],
+            'business_phones': [{'phone': '+1 212 555 0100', 'normalized': '+12125550100',
+                                 'type': 'general', 'source_url': 'https://hotel.example/contact'}],
+            'decision_makers': [{'name': 'Jane Doe', 'title': 'IT Director'}],
         }
         result = self._post([{'name': 'Example Hotel'}]).json()['results'][0]
         self.assertEqual(
@@ -79,6 +84,9 @@ class BulkHotelEnrichmentAPITests(APITestCase):
             result['discovered_pages']['contact'], 'https://hotel.example/contact'
         )
         self.assertIn('about', result['discovered_pages'])
+        self.assertEqual(result['business_emails'][0]['email'], 'info@hotel.example')
+        self.assertEqual(result['business_phones'][0]['normalized'], '+12125550100')
+        self.assertEqual(result['decision_makers'][0]['title'], 'IT Director')
 
     @patch('hotels.services.enrichment.bulk.enrich_hotel_from_website')
     def test_multiple_improvements_and_summary(self, mock_enrich):

@@ -89,13 +89,31 @@ class OfficialWebsitePeopleParserTests(SimpleTestCase):
         self.assertEqual(contact['source'], 'Official Website')
         self.assertIsNone(contact['linkedin_url'])
 
+    def test_target_technology_operations_and_executive_roles(self):
+        html = '''
+          <p>Alice Brown - IT Director</p>
+          <p>Brian Green - IT Infrastructure Manager</p>
+          <p>Carla White - Chief Information Officer</p>
+          <p>David Black - Director of Operations</p>
+          <p>Elena Stone - Hotel General Manager</p>
+        '''
+        contacts = self.contacts(html)
+        self.assertEqual(
+            {contact['role_group'] for contact in contacts},
+            {'it_leadership', 'it_management', 'executive', 'operations', 'general_manager'},
+        )
+        self.assertTrue(all(contact['source_url'] for contact in contacts))
+
+    def test_unrelated_titles_are_ignored(self):
+        self.assertEqual(self.contacts('<p>Jane Doe - Restaurant Manager</p>'), [])
+
 
 @patch('hotels.services.people_enrichment.official_website._fetch_html')
 class OfficialWebsitePeopleProviderTests(SimpleTestCase):
     def setUp(self):
         self.provider = OfficialWebsitePeopleEnrichmentProvider()
 
-    def test_multiple_people_are_prioritized_and_capped(self, fetch):
+    def test_multiple_people_are_prioritized(self, fetch):
         fetch.return_value = ('https://hotel.example/', '''
           <p>Alice Brown — Sales Executive</p>
           <p>John Smith — General Manager</p>
@@ -103,7 +121,7 @@ class OfficialWebsitePeopleProviderTests(SimpleTestCase):
           <p>Rahul Kumar — Sales Manager</p>
         ''')
         result = self.provider.search_decision_makers(BUSINESS)
-        self.assertEqual(len(result['contacts']), 3)
+        self.assertEqual(len(result['contacts']), 4)
         self.assertEqual(result['contacts'][0]['role_group'], 'general_manager')
 
     def test_same_person_on_two_pages_is_deduplicated(self, fetch):

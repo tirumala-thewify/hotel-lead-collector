@@ -59,6 +59,28 @@ class ExcelWorkbookTests(SimpleTestCase):
     def test_workbook_contains_hotels(self):
         self.assertIn('Hotels', self.workbook().sheetnames)
 
+    def test_workbook_contains_structured_enrichment_sheets(self):
+        hotel = {
+            **HOTEL,
+            'business_emails': [{'email': 'sales@hotel.example', 'type': 'sales',
+                                 'source_url': 'https://hotel.example/contact'}],
+            'business_phones': [{'phone': '+1 212 555 0100', 'type': 'general',
+                                 'source_url': 'https://hotel.example/contact'}],
+            'decision_makers': [{'name': 'Jane Doe', 'title': 'IT Director',
+                                 'department': 'Information Technology',
+                                 'role_group': 'it_leadership',
+                                 'source_url': 'https://hotel.example/team'}],
+            'social_profiles': {'linkedin': 'https://linkedin.com/company/hotel'},
+            'social_profile_sources': {'linkedin': 'https://hotel.example/'},
+        }
+        workbook = self.workbook([hotel])
+        self.assertIn('Business Contacts', workbook.sheetnames)
+        self.assertIn('Decision Makers', workbook.sheetnames)
+        self.assertIn('Social Profiles', workbook.sheetnames)
+        self.assertEqual(workbook['Business Contacts'].max_row, 3)
+        self.assertEqual(workbook['Decision Makers'].cell(2, 2).value, 'Jane Doe')
+        self.assertEqual(workbook['Social Profiles'].cell(2, 2).value, 'Linkedin')
+
     def test_headers_are_correct(self):
         sheet = self.workbook()['Hotels']
         self.assertEqual(

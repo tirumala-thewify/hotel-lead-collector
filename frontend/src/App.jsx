@@ -285,6 +285,12 @@ function App() {
           enrichment_message: result.status === 'ERROR' ? 'Free enrichment failed for this hotel.' : '',
           enrichment_sources: result.sources,
           website_confidence: result.website_confidence,
+          business_emails: result.business_emails || [],
+          business_phones: result.business_phones || [],
+          social_profiles: result.social_profiles || {},
+          social_profile_sources: result.social_profile_sources || {},
+          discovered_pages: result.discovered_pages || {},
+          decision_makers: result.decision_makers || hotel.decision_makers || [],
         }
       }))
       setFreeEnrichmentSummary(data.summary)
@@ -314,6 +320,12 @@ function App() {
           enrichment_status: enriched.status,
           enrichment_message: enriched.message || '',
           enrichment_sources: enriched.sources || {},
+          business_emails: enriched.business_emails || [],
+          business_phones: enriched.business_phones || [],
+          social_profiles: enriched.social_profiles || {},
+          social_profile_sources: enriched.social_profile_sources || {},
+          discovered_pages: enriched.discovered_pages || {},
+          decision_makers: enriched.decision_makers || item.decision_makers || [],
         }
       }))
     } catch (enrichmentError) {

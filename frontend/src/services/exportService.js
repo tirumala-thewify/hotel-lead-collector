@@ -27,6 +27,36 @@ function manager(hotel, department) {
 }
 
 const COLUMNS = [...BASE_COLUMNS]
+const joinValues = (items, value) => (items || []).map(value).filter(Boolean).join('; ')
+const roleContacts = (hotel, groups) => (hotel.decision_makers || []).filter((item) => groups.includes(item.role_group))
+const roleValue = (hotel, groups, field) => joinValues(roleContacts(hotel, groups), (item) => item[field] || (field === 'email' ? item.business_email : null))
+COLUMNS.push(
+  ['All Business Emails', (hotel) => joinValues(hotel.business_emails, (item) => `${item.email} [${item.type || 'other'}]`)],
+  ['Business Email Source URLs', (hotel) => joinValues(hotel.business_emails, (item) => item.source_url)],
+  ['All Business Phones', (hotel) => joinValues(hotel.business_phones, (item) => `${item.phone} [${item.type || 'general'}]`)],
+  ['Business Phone Source URLs', (hotel) => joinValues(hotel.business_phones, (item) => item.source_url)],
+  ['LinkedIn', (hotel) => hotel.social_profiles?.linkedin],
+  ['LinkedIn Source URL', (hotel) => hotel.social_profile_sources?.linkedin],
+  ['Facebook', (hotel) => hotel.social_profiles?.facebook],
+  ['Facebook Source URL', (hotel) => hotel.social_profile_sources?.facebook],
+  ['Instagram', (hotel) => hotel.social_profiles?.instagram],
+  ['Instagram Source URL', (hotel) => hotel.social_profile_sources?.instagram],
+  ['Decision Makers', (hotel) => joinValues(hotel.decision_makers, (item) => `${item.name || 'Team'} — ${item.title}`)],
+  ['Decision Maker Source URLs', (hotel) => joinValues(hotel.decision_makers, (item) => item.source_url)],
+)
+for (const [label, groups] of [
+  ['General Manager', ['general_manager']],
+  ['IT Director / Head of IT', ['it_leadership', 'it_management']],
+  ['CIO / CTO', ['executive']],
+  ['Director of Operations', ['operations']],
+  ['Sales Contact', ['sales']],
+]) {
+  COLUMNS.push(
+    [label, (hotel) => roleValue(hotel, groups, 'name')],
+    [`${label} Email`, (hotel) => roleValue(hotel, groups, 'email')],
+    [`${label} Phone`, (hotel) => roleValue(hotel, groups, 'phone')],
+  )
+}
 for (const [label, department] of MANAGER_GROUPS) {
   COLUMNS.push(
     [`${label} Name`, (hotel) => manager(hotel, department).name],
@@ -78,7 +108,7 @@ function download(blob, name) {
   URL.revokeObjectURL(url)
 }
 
-export function exportHotelsCsv(hotels, context) {
+export function buildHotelsCsv(hotels, context) {
   const summary = [
     ['Search Location', context.location],
     ['Search Latitude', context.latitude],
@@ -96,7 +126,11 @@ export function exportHotelsCsv(hotels, context) {
       COLUMNS.map(([, getValue]) => csvCell(getValue(hotel, index))).join(',')
     )),
   ]
-  const blob = new Blob([`\uFEFF${rows.join('\r\n')}`], { type: 'text/csv;charset=utf-8' })
+  return `\uFEFF${rows.join('\r\n')}`
+}
+
+export function exportHotelsCsv(hotels, context) {
+  const blob = new Blob([buildHotelsCsv(hotels, context)], { type: 'text/csv;charset=utf-8' })
   download(blob, filename('csv', context.location))
 }
 

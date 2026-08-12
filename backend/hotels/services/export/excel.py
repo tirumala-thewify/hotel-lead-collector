@@ -84,6 +84,27 @@ def _safe_hyperlink(value):
     return value if parsed.scheme in {'http', 'https'} and parsed.netloc else None
 
 
+def _add_structured_sheet(workbook, title, headers, rows, link_columns=()):
+    sheet = workbook.create_sheet(title)
+    sheet.append(headers)
+    for cell in sheet[1]:
+        cell.font = Font(bold=True, color='FFFFFF')
+        cell.fill = PatternFill('solid', fgColor='172033')
+    for row in rows:
+        sheet.append([sanitize_spreadsheet_value(value) for value in row])
+        for column in link_columns:
+            cell = sheet.cell(sheet.max_row, column)
+            link = _safe_hyperlink(cell.value)
+            if link:
+                cell.hyperlink = link
+                cell.style = 'Hyperlink'
+    sheet.freeze_panes = 'A2'
+    sheet.auto_filter.ref = f'A1:{get_column_letter(len(headers))}{sheet.max_row}'
+    for index, header in enumerate(headers, start=1):
+        sheet.column_dimensions[get_column_letter(index)].width = max(18, min(50, len(header) + 4))
+    return sheet
+
+
 def build_hotel_workbook(hotels, context):
     workbook = Workbook()
     summary = workbook.active
@@ -149,6 +170,47 @@ def build_hotel_workbook(hotels, context):
     for index, width in enumerate(widths, start=1):
         sheet.column_dimensions[get_column_letter(index)].width = width
     sheet.row_dimensions[1].height = 34
+
+    business_rows = []
+    people_rows = []
+    social_rows = []
+    for hotel in hotels:
+        for item in hotel.get('business_emails') or []:
+            business_rows.append((hotel.get('name'), 'Email', item.get('email'),
+                                  item.get('type'), item.get('source_url')))
+        for item in hotel.get('business_phones') or []:
+            business_rows.append((hotel.get('name'), 'Phone', item.get('phone'),
+                                  item.get('type'), item.get('source_url')))
+        for contact in hotel.get('decision_makers') or []:
+            people_rows.append((
+                hotel.get('name'), contact.get('name'), contact.get('title'),
+                contact.get('department'), contact.get('role_group'),
+                contact.get('business_email') or contact.get('email'),
+                contact.get('phone'), contact.get('source_url'),
+                contact.get('confidence'),
+            ))
+        profiles = hotel.get('social_profiles') or {}
+        profile_sources = hotel.get('social_profile_sources') or {}
+        for platform in ('linkedin', 'facebook', 'instagram'):
+            if profiles.get(platform):
+                social_rows.append((hotel.get('name'), platform.title(),
+                                    profiles[platform], profile_sources.get(platform)))
+    _add_structured_sheet(
+        workbook, 'Business Contacts',
+        ['Hotel Name', 'Contact Kind', 'Value', 'Type', 'Source URL'],
+        business_rows, link_columns=(5,),
+    )
+    _add_structured_sheet(
+        workbook, 'Decision Makers',
+        ['Hotel Name', 'Name', 'Title', 'Department', 'Role Group', 'Email',
+         'Phone', 'Source URL', 'Confidence'],
+        people_rows, link_columns=(8,),
+    )
+    _add_structured_sheet(
+        workbook, 'Social Profiles',
+        ['Hotel Name', 'Platform', 'Profile URL', 'Source URL'],
+        social_rows, link_columns=(3, 4),
+    )
 
     output = BytesIO()
     workbook.save(output)

@@ -27,7 +27,11 @@ function HotelDetailsDrawer({ hotel, categoryName, onClose, onEnrich, onFindMana
 
   if (!hotel) return null
   const sources = hotel.enrichment_sources || {}
-  const decisionMakers = (hotel.decision_makers || hotel.manager_contacts || []).slice(0, 3)
+  const decisionMakers = hotel.decision_makers || hotel.manager_contacts || []
+  const businessEmails = hotel.business_emails || []
+  const businessPhones = hotel.business_phones || []
+  const socialProfiles = hotel.social_profiles || {}
+  const socialSources = hotel.social_profile_sources || {}
   const decisionMakerAvailable = apolloEnabled && apolloConfigured
   const apolloHelp = !apolloEnabled
     ? 'Apollo is disabled in Settings.'
@@ -51,6 +55,16 @@ function HotelDetailsDrawer({ hotel, categoryName, onClose, onEnrich, onFindMana
           <div className="wide-detail"><dt>Address</dt><dd>{value(hotel.address)}</dd></div>
         </dl></section>
 
+        <section><h3>Official Website Contacts</h3>
+          {businessEmails.length === 0 && businessPhones.length === 0 && <p className="muted-copy">Not available from the official website</p>}
+          {businessEmails.map((contact) => <p key={`${contact.email}-${contact.source_url}`}><a href={`mailto:${contact.email}`}>{contact.email}</a> <small>{contact.type || 'other'} · Source: <a href={contact.source_url} target="_blank" rel="noopener noreferrer">official page</a></small></p>)}
+          {businessPhones.map((contact) => <p key={`${contact.normalized}-${contact.source_url}`}>{contact.phone} <small>{contact.type || 'general'} · Source: <a href={contact.source_url} target="_blank" rel="noopener noreferrer">official page</a></small></p>)}
+        </section>
+
+        {Object.values(socialProfiles).some(Boolean) && <section><h3>Social Profiles</h3><dl className="detail-list">
+          {['linkedin', 'facebook', 'instagram'].filter((platform) => socialProfiles[platform]).map((platform) => <div key={platform}><dt>{platform[0].toUpperCase() + platform.slice(1)}</dt><dd><a href={socialProfiles[platform]} target="_blank" rel="noopener noreferrer">Open profile</a>{socialSources[platform] && <small>Linked from <a href={socialSources[platform]} target="_blank" rel="noopener noreferrer">official website</a></small>}</dd></div>)}
+        </dl></section>}
+
         <section><h3>Business Information</h3><dl className="detail-list">
           <div><dt>Brand</dt><dd>{value(hotel.brand)}</dd></div>
           <div><dt>Category</dt><dd>{value(categoryName)}</dd></div>
@@ -71,6 +85,7 @@ function HotelDetailsDrawer({ hotel, categoryName, onClose, onEnrich, onFindMana
                 <div><dt>Work Phone</dt><dd>{value(contact.phone)}{contact.phone && <small>Source: {value(contact.phone_source || contact.source)}</small>}</dd></div>
                 <div><dt>LinkedIn</dt><dd>{contact.linkedin_url ? <a href={contact.linkedin_url} target="_blank" rel="noopener noreferrer">Open Profile</a> : missing}</dd></div>
                 <div><dt>{contact.sources?.length > 1 ? 'Sources' : 'Source'}</dt><dd>{value(contact.sources?.join(' + ') || contact.source)}</dd></div>
+                {contact.source_url && <div><dt>Evidence</dt><dd><a href={contact.source_url} target="_blank" rel="noopener noreferrer">Official website page</a>{contact.confidence && <small>Confidence: {contact.confidence}</small>}</dd></div>}
               </dl>
             </article>
           )) : <p className="muted-copy">{statusMessage(hotel.manager_status)}</p>}
