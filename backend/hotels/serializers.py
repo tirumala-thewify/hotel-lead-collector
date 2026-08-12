@@ -1,6 +1,7 @@
 from rest_framework import serializers
 
 from .business_categories import BUSINESS_CATEGORIES
+from .models import ProviderSettings
 
 
 class NearbyHotelsQuerySerializer(serializers.Serializer):
@@ -22,6 +23,11 @@ class NearbyHotelsQuerySerializer(serializers.Serializer):
     category = serializers.ChoiceField(
         choices=tuple(BUSINESS_CATEGORIES),
         default='hotels_resorts',
+        required=False,
+    )
+    providers = serializers.ListField(
+        child=serializers.ChoiceField(choices=ProviderSettings.HOTEL_PROVIDER_CHOICES),
+        allow_empty=False,
         required=False,
     )
 

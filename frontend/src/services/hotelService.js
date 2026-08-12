@@ -13,9 +13,11 @@ export class HotelServiceError extends Error {
   }
 }
 
-export async function fetchNearbyHotels(lat, lng, radius, category = 'hotels_resorts') {
+export async function fetchNearbyHotels(lat, lng, radius, category = 'hotels_resorts', providers = []) {
   const url = new URL(NEARBY_HOTELS_URL)
-  url.search = new URLSearchParams({ lat, lng, radius, category }).toString()
+  const query = new URLSearchParams({ lat, lng, radius, category })
+  providers.forEach((provider) => query.append('providers', provider))
+  url.search = query.toString()
 
   let response
   try {

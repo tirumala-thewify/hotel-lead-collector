@@ -29,7 +29,7 @@ function validate(values) {
   return { errors, latitude, longitude, radius }
 }
 
-function SearchForm({ values, onValuesChange, onSearch, loading, selectedLocationName, categories, selectedCategory, onCategoryChange }) {
+function SearchForm({ values, onValuesChange, onSearch, loading, selectedLocationName, categories, selectedCategory, onCategoryChange, availableProviders = [], selectedProviders = [], onProvidersChange }) {
   const [errors, setErrors] = useState({})
   const [advancedOpen, setAdvancedOpen] = useState(false)
 
@@ -42,6 +42,7 @@ function SearchForm({ values, onValuesChange, onSearch, loading, selectedLocatio
   const handleSubmit = (event) => {
     event.preventDefault()
     const result = validate(values)
+    if (selectedProviders.length === 0) result.errors.providers = 'Select at least one business data provider.'
     setErrors(result.errors)
 
     if (Object.keys(result.errors).length === 0) {
@@ -75,6 +76,17 @@ function SearchForm({ values, onValuesChange, onSearch, loading, selectedLocatio
           {loading ? 'Searching...' : 'Find Businesses'}
         </button>
       </div>
+      <fieldset className="search-provider-options">
+        <legend>Providers</legend>
+        {availableProviders.map((provider) => <label key={provider.id}>
+          <input type="checkbox" checked={selectedProviders.includes(provider.id)} disabled={loading}
+            onChange={() => onProvidersChange(selectedProviders.includes(provider.id)
+              ? selectedProviders.filter((item) => item !== provider.id)
+              : [...selectedProviders, provider.id])} />
+          <span>{provider.name}</span>
+        </label>)}
+      </fieldset>
+      {errors.providers && <span className="field-error">{errors.providers}</span>}
       <button type="button" className="advanced-toggle" onClick={() => setAdvancedOpen((current) => !current)} aria-expanded={advancedOpen}>
         Advanced Search <span aria-hidden="true">{advancedOpen ? '▴' : '▾'}</span>
       </button>

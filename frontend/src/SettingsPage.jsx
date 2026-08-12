@@ -14,6 +14,12 @@ function SettingsPage() {
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
 
+  const toggleProvider = (provider) => {
+    const selected = settings.business_providers || [settings.hotel_provider]
+    setSettings({ ...settings, business_providers: selected.includes(provider)
+      ? selected.filter((item) => item !== provider) : [...selected, provider] })
+  }
+
   useEffect(() => {
     fetchProviderSettings().then(setSettings).catch((requestError) => setError(requestError.message))
   }, [])
@@ -58,25 +64,27 @@ function SettingsPage() {
 
       <section className="settings-card">
         <div className="settings-card-heading">
-          <div><span className="section-kicker">Business data</span><h2>Business data provider</h2><p>Choose the source used for nearby business searches.</p></div>
+          <div><span className="section-kicker">Business data</span><h2>Business data providers</h2><p>Choose the sources available for nearby business searches.</p></div>
           <span className={`configured-badge ${settings.google_configured ? 'is-configured' : ''}`}>
             Google {settings.google_configured ? 'configured' : 'not configured'}
           </span>
         </div>
         <div className="provider-options">
-          <label><input type="radio" name="hotel-provider" value="openstreetmap"
-            checked={settings.hotel_provider === 'openstreetmap'}
-            onChange={() => setSettings({ ...settings, hotel_provider: 'openstreetmap' })} />
+          <label><input type="checkbox" value="openstreetmap"
+            checked={settings.business_providers.includes('openstreetmap')}
+            onChange={() => toggleProvider('openstreetmap')} />
             <span><strong>OpenStreetMap <em className="inline-status">Default</em></strong><small>Free default business discovery · No API key required</small></span>
           </label>
-          <label><input type="radio" name="hotel-provider" value="geoapify"
-            checked={settings.hotel_provider === 'geoapify'}
-            onChange={() => setSettings({ ...settings, hotel_provider: 'geoapify' })} />
+          <label><input type="checkbox" value="geoapify"
+            checked={settings.business_providers.includes('geoapify')}
+            disabled={!settings.geoapify_configured}
+            onChange={() => toggleProvider('geoapify')} />
             <span><strong>Geoapify <em className="inline-status">{settings.geoapify_configured ? 'Configured' : 'Not configured'}</em></strong><small>Free tier / quota-based · API key required</small></span>
           </label>
-          <label><input type="radio" name="hotel-provider" value="google"
-            checked={settings.hotel_provider === 'google'}
-            onChange={() => setSettings({ ...settings, hotel_provider: 'google' })} />
+          <label><input type="checkbox" value="google"
+            checked={settings.business_providers.includes('google')}
+            disabled={!settings.google_configured}
+            onChange={() => toggleProvider('google')} />
             <span><strong>Google Places <em className="inline-status">Optional</em></strong><small>Currently supports Hotels & Resorts · API key required</small></span>
           </label>
         </div>
@@ -87,7 +95,7 @@ function SettingsPage() {
           onChange={setGoogleKey} placeholder={settings.google_configured ? 'Saved key is hidden' : 'Enter API key'} />
         <p className="secret-help">Leave blank to keep the existing saved key.</p>
         <button className="settings-save" disabled={saving} onClick={() => save({
-          hotel_provider: settings.hotel_provider,
+          business_providers: settings.business_providers,
           ...(geoapifyKey ? { geoapify_api_key: geoapifyKey } : {}),
           ...(googleKey ? { google_api_key: googleKey } : {}),
         }, () => { setGeoapifyKey(''); setGoogleKey('') })}>Save Changes</button>

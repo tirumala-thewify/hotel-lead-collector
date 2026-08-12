@@ -8,7 +8,9 @@ async function parseResponse(response) {
     throw new Error('The settings API returned an invalid response.')
   }
   if (!response.ok) {
-    throw new Error(data?.detail || 'Unable to save provider settings.')
+    const providerError = data?.business_providers
+    throw new Error((Array.isArray(providerError) ? providerError[0] : providerError)
+      || data?.detail || 'Unable to save provider settings.')
   }
   return data
 }

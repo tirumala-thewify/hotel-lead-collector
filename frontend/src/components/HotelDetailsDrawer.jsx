@@ -54,7 +54,7 @@ function HotelDetailsDrawer({ hotel, categoryName, onClose, onEnrich, onFindMana
           <div><dt>Brand</dt><dd>{value(hotel.brand)}</dd></div>
           <div><dt>Category</dt><dd>{value(categoryName)}</dd></div>
           {hotel.stars && <div><dt>Stars</dt><dd>{value(hotel.stars)}</dd></div>}
-          <div><dt>Source</dt><dd>{value(hotel.source)}</dd></div>
+          <div><dt>{hotel.sources?.length > 1 ? 'Sources' : 'Source'}</dt><dd>{value(hotel.source)}</dd></div>
           <div><dt>Distance</dt><dd>{hotel.distance_km == null ? missing : `${Number(hotel.distance_km).toFixed(2)} km`}</dd></div>
           <div><dt>Coordinates</dt><dd>{value(hotel.latitude)}, {value(hotel.longitude)}</dd></div>
         </dl></section>
@@ -77,7 +77,7 @@ function HotelDetailsDrawer({ hotel, categoryName, onClose, onEnrich, onFindMana
         </section>
 
         <section><h3>Data Sources</h3><dl className="source-detail-list">
-          {fields.map((field) => <div key={field}><dt>{field}</dt><dd>{value(sources[field] || (hotel[field] ? hotel.source : null))}</dd></div>)}
+          {fields.map((field) => <div key={field}><dt>{field}</dt><dd>{value(sources[field] || hotel[`${field}_source`] || (hotel[field] ? hotel.source : null))}</dd></div>)}
         </dl></section>
 
         <footer className="drawer-actions">

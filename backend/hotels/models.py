@@ -26,6 +26,8 @@ class ProviderSettings(models.Model):
         choices=HOTEL_PROVIDER_CHOICES,
         default=OPENSTREETMAP,
     )
+    business_providers = models.JSONField(default=list, blank=True)
+    business_providers = models.JSONField(default=list, blank=True)
     google_api_key_encrypted = models.TextField(blank=True)
     geoapify_api_key_encrypted = models.TextField(blank=True)
     apollo_enabled = models.BooleanField(default=False)

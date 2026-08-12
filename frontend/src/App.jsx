@@ -57,6 +57,9 @@ function App() {
   const [enrichingHotels, setEnrichingHotels] = useState({})
   const [managerSearches, setManagerSearches] = useState({})
   const [providerSettings, setProviderSettings] = useState(null)
+  const [selectedProviders, setSelectedProviders] = useState([])
+  const [searchedProviders, setSearchedProviders] = useState([])
+  const [providerWarning, setProviderWarning] = useState('')
   const [selectedHotelKeys, setSelectedHotelKeys] = useState([])
   const [bulkManagerRunning, setBulkManagerRunning] = useState(false)
   const [bulkManagerSummary, setBulkManagerSummary] = useState(null)
@@ -75,12 +78,16 @@ function App() {
   const [categories, setCategories] = useState(defaultCategories)
   const [selectedCategory, setSelectedCategory] = useState('hotels_resorts')
   const [categoryLoadError, setCategoryLoadError] = useState('')
-  const providerName = providerSettings?.hotel_provider === 'google'
-    ? 'Google Places'
-    : providerSettings?.hotel_provider === 'geoapify' ? 'Geoapify' : 'OpenStreetMap'
+  const providerLabels = { openstreetmap: 'OpenStreetMap', geoapify: 'Geoapify', google: 'Google Places' }
+  const availableProviders = (providerSettings?.business_providers || []).map((id) => ({ id, name: providerLabels[id] }))
+  const providerNames = (searchedProviders.length ? searchedProviders : selectedProviders)
+    .map((provider) => providerLabels[provider])
 
   useEffect(() => {
-    fetchProviderSettings().then(setProviderSettings).catch(() => {})
+    fetchProviderSettings().then((settings) => {
+      setProviderSettings(settings)
+      setSelectedProviders(settings.business_providers || [settings.hotel_provider])
+    }).catch(() => {})
     fetchBusinessCategories()
       .then(setCategories)
       .catch(() => setCategoryLoadError('Business types could not be loaded. Hotels & Resorts remains available.'))
@@ -91,10 +98,11 @@ function App() {
 
     setLoading(true)
     setError('')
+    setProviderWarning('')
     setHasSearched(false)
 
     try {
-      const data = await fetchNearbyHotels(lat, lng, radius, selectedCategory)
+      const data = await fetchNearbyHotels(lat, lng, radius, selectedCategory, selectedProviders)
       setHotels(data.hotels.map((business) => ({
         ...business,
         category: business.category || data.category || selectedCategory,
@@ -105,6 +113,14 @@ function App() {
       setSelectedHotel(null)
       setDrawerHotelKey(null)
       setHasSearched(true)
+      setSearchedProviders(data.providers || selectedProviders)
+      const failed = Object.entries(data.provider_results || {})
+        .filter(([, result]) => result.status === 'error').map(([provider]) => providerLabels[provider])
+      if (failed.length) {
+        const succeeded = Object.entries(data.provider_results).filter(([, result]) => result.status === 'success')
+          .map(([provider]) => providerLabels[provider])
+        setProviderWarning(`${failed.join(' + ')} was unavailable. Results shown from ${succeeded.join(' + ')}.`)
+      }
     } catch (requestError) {
       setHotels([])
       if (requestError instanceof HotelServiceError && requestError.status === 502) {
@@ -310,15 +326,16 @@ function App() {
 
   return (
     <main className="app-shell">
-      <AppHeader providerName={providerName} />
-      <SearchPanel onLocationSelect={handleLocationSelect} values={searchValues} onValuesChange={handleSearchValuesChange} onSearch={handleSearch} loading={loading} selectedLocationName={selectedLocationName} categories={categories} selectedCategory={selectedCategory} onCategoryChange={handleCategoryChange} categoryLoadError={categoryLoadError} />
+      <AppHeader providerName={providerNames.join(' + ')} />
+      <SearchPanel onLocationSelect={handleLocationSelect} values={searchValues} onValuesChange={handleSearchValuesChange} onSearch={handleSearch} loading={loading} selectedLocationName={selectedLocationName} categories={categories} selectedCategory={selectedCategory} onCategoryChange={handleCategoryChange} categoryLoadError={categoryLoadError} availableProviders={availableProviders} selectedProviders={selectedProviders} onProvidersChange={setSelectedProviders} />
       <div className="map-summary-workspace">
         <HotelMap location={{ latitude: searchValues.lat, longitude: searchValues.lng }} radius={searchValues.radius} hotels={hotels} onLocationChange={handleLocationChange} selectedHotel={selectedHotel} onSelectHotel={setSelectedHotel} />
-        <SearchSummary locationName={selectedLocationName} radius={searchValues.radius} providerName={providerName} hotels={hotels} hasSearched={hasSearched} categoryName={categories.find((category) => category.id === selectedCategory)?.name || 'Hotels & Resorts'} />
+        <SearchSummary locationName={selectedLocationName} radius={searchValues.radius} providerNames={providerNames} hotels={hotels} hasSearched={hasSearched} categoryName={categories.find((category) => category.id === selectedCategory)?.name || 'Hotels & Resorts'} />
       </div>
 
       <section className="results-section" aria-live="polite" aria-busy={loading}>
         {loading && <div className="compact-alert loading-status">Searching nearby businesses...</div>}
+        {!loading && providerWarning && <div className="compact-alert loading-status" role="status">{providerWarning}</div>}
 
         {!loading && error && (
           <div className="compact-alert error-status" role="alert">
@@ -355,7 +372,7 @@ function App() {
               onRun={handleBulkManagers}
             />
             {selectedCategory !== 'hotels_resorts' && <span className="action-note enrichment-limitation">Business contact enrichment for this category will be added in a later phase.</span>}
-            <ExportButtons hotels={hotels} context={{ location: selectedLocationName, latitude: Number(searchValues.lat), longitude: Number(searchValues.lng), radius: Number(searchValues.radius), provider: providerName }} />
+            <ExportButtons hotels={hotels} context={{ location: selectedLocationName, latitude: Number(searchValues.lat), longitude: Number(searchValues.lng), radius: Number(searchValues.radius), provider: providerNames.join(' + ') }} />
             </ResultsToolbar>
             <HotelTable
               hotels={hotels}

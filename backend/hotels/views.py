@@ -18,6 +18,11 @@ from .services.enrichment.base import EnrichmentError
 from .services.openstreetmap import OpenStreetMapError, search_nearby_hotels
 from .services.google_places import GooglePlacesError
 from .services.geoapify import GeoapifyError
+from .services.providers.orchestrator import (
+    InvalidProviderSelectionError,
+    MultiProviderSearchError,
+    search_businesses_multi_provider,
+)
 from .services.providers import get_hotel_provider
 from .services.providers.base import (
     HotelProviderConfigurationError,
@@ -50,18 +55,26 @@ def nearby_hotels(request):
     params = serializer.validated_data
 
     try:
-        provider = get_hotel_provider()
-        hotels = provider.search_nearby_businesses(
-            latitude=params['lat'],
-            longitude=params['lng'],
-            radius=params['radius'],
-            category=params['category'],
+        if 'providers' not in params:
+            hotels = get_hotel_provider().search_nearby_businesses(
+                latitude=params['lat'], longitude=params['lng'], radius=params['radius'],
+                category=params['category'],
+            )
+            return Response({
+                'count': len(hotels), 'hotels': hotels, 'category': params['category'],
+                'category_display_name': get_business_category(params['category'])['display_name'],
+            })
+        result = search_businesses_multi_provider(
+            latitude=params['lat'], longitude=params['lng'], radius=params['radius'],
+            category=params['category'], providers=params['providers'],
         )
     except HotelProviderConfigurationError as exc:
         return Response({'error': str(exc)}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
     except UnsupportedBusinessCategoryError as exc:
         return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
-    except (OpenStreetMapError, GooglePlacesError, GeoapifyError):
+    except InvalidProviderSelectionError as exc:
+        return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+    except (MultiProviderSearchError, OpenStreetMapError, GooglePlacesError, GeoapifyError):
         logger.exception('Hotel provider search failed.')
         return Response(
             {'error': 'Unable to retrieve hotel data at this time.'},
@@ -69,10 +82,10 @@ def nearby_hotels(request):
         )
 
     return Response({
-        'count': len(hotels),
-        'hotels': hotels,
+        'count': len(result['hotels']),
         'category': params['category'],
         'category_display_name': get_business_category(params['category'])['display_name'],
+        **result,
     })
 
 
