@@ -32,6 +32,10 @@ class ProviderSettings(models.Model):
     geoapify_api_key_encrypted = models.TextField(blank=True)
     apollo_enabled = models.BooleanField(default=False)
     apollo_api_key_encrypted = models.TextField(blank=True)
+    people_providers = models.JSONField(default=list, blank=True)
+    zoominfo_api_key_encrypted = models.TextField(blank=True)
+    people_providers = models.JSONField(default=list, blank=True)
+    zoominfo_api_key_encrypted = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -69,6 +73,18 @@ class ProviderSettings(models.Model):
 
     def get_apollo_api_key(self):
         return self._get_secret('apollo_api_key_encrypted')
+
+    def set_zoominfo_api_key(self, value):
+        self._set_secret('zoominfo_api_key_encrypted', value)
+
+    def get_zoominfo_api_key(self):
+        return self._get_secret('zoominfo_api_key_encrypted')
+
+    def set_zoominfo_api_key(self, value):
+        self._set_secret('zoominfo_api_key_encrypted', value)
+
+    def get_zoominfo_api_key(self):
+        return self._get_secret('zoominfo_api_key_encrypted')
 
     def save(self, *args, **kwargs):
         self.pk = 1

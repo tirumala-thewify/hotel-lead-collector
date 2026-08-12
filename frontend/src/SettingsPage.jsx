@@ -10,6 +10,7 @@ function SettingsPage() {
   const [googleKey, setGoogleKey] = useState('')
   const [geoapifyKey, setGeoapifyKey] = useState('')
   const [apolloKey, setApolloKey] = useState('')
+  const [zoominfoKey, setZoominfoKey] = useState('')
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
@@ -17,6 +18,12 @@ function SettingsPage() {
   const toggleProvider = (provider) => {
     const selected = settings.business_providers || [settings.hotel_provider]
     setSettings({ ...settings, business_providers: selected.includes(provider)
+      ? selected.filter((item) => item !== provider) : [...selected, provider] })
+  }
+
+  const togglePeopleProvider = (provider) => {
+    const selected = settings.people_providers || []
+    setSettings({ ...settings, people_providers: selected.includes(provider)
       ? selected.filter((item) => item !== provider) : [...selected, provider] })
   }
 
@@ -103,23 +110,32 @@ function SettingsPage() {
 
       <section className="settings-card">
         <div className="settings-card-heading">
-          <div><span className="section-kicker">People enrichment</span><h2>Apollo</h2><p>Optional decision-maker searches.</p></div>
-          <span className={`configured-badge ${settings.apollo_enabled && settings.apollo_configured ? 'is-configured' : ''}`}>
-            Apollo {!settings.apollo_enabled ? 'disabled' : settings.apollo_configured ? 'configured' : 'not configured'}
+          <div><span className="section-kicker">People enrichment</span><h2>People enrichment providers</h2><p>Optional decision-maker searches.</p></div>
+          <span className={`configured-badge ${settings.people_providers.length ? 'is-configured' : ''}`}>
+            {settings.people_providers.length ? 'Enabled' : 'Disabled'}
           </span>
         </div>
         <label className="toggle-row">
-          <input type="checkbox" checked={settings.apollo_enabled}
-            onChange={(event) => setSettings({ ...settings, apollo_enabled: event.target.checked })} />
-          <span><strong>Enable Apollo</strong><small>Disabled by default</small></span>
+          <input type="checkbox" checked={settings.people_providers.includes('apollo')}
+            disabled={!settings.apollo_configured} onChange={() => togglePeopleProvider('apollo')} />
+          <span><strong>Apollo</strong><small>{settings.apollo_configured ? 'Configured' : 'Not configured'}</small></span>
+        </label>
+        <label className="toggle-row">
+          <input type="checkbox" checked={settings.people_providers.includes('zoominfo')}
+            disabled={!settings.zoominfo_configured} onChange={() => togglePeopleProvider('zoominfo')} />
+          <span><strong>ZoomInfo</strong><small>{settings.zoominfo_configured ? 'Configured' : 'Not configured'}</small></span>
         </label>
         <SecretInput id="apollo-key" label="Apollo API Key" value={apolloKey}
           onChange={setApolloKey} placeholder={settings.apollo_configured ? 'Saved key is hidden' : 'Enter API key'} />
         <p className="secret-help">Leave blank to keep the existing saved key. Saved keys are never returned.</p>
+        <SecretInput id="zoominfo-key" label="ZoomInfo API Key" value={zoominfoKey}
+          onChange={setZoominfoKey} placeholder={settings.zoominfo_configured ? 'Saved key is hidden' : 'Enter API key'} />
+        <p className="secret-help">Leave blank to keep the existing saved key.</p>
         <button className="settings-save" disabled={saving} onClick={() => save({
-          apollo_enabled: settings.apollo_enabled,
+          people_providers: settings.people_providers,
           ...(apolloKey ? { apollo_api_key: apolloKey } : {}),
-        }, () => setApolloKey(''))}>Save Changes</button>
+          ...(zoominfoKey ? { zoominfo_api_key: zoominfoKey } : {}),
+        }, () => { setApolloKey(''); setZoominfoKey('') })}>Save Changes</button>
       </section>
     </main>
   )

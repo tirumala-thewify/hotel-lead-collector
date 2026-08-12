@@ -58,6 +58,7 @@ function App() {
   const [managerSearches, setManagerSearches] = useState({})
   const [providerSettings, setProviderSettings] = useState(null)
   const [selectedProviders, setSelectedProviders] = useState([])
+  const [selectedPeopleProviders, setSelectedPeopleProviders] = useState([])
   const [searchedProviders, setSearchedProviders] = useState([])
   const [providerWarning, setProviderWarning] = useState('')
   const [selectedHotelKeys, setSelectedHotelKeys] = useState([])
@@ -87,6 +88,7 @@ function App() {
     fetchProviderSettings().then((settings) => {
       setProviderSettings(settings)
       setSelectedProviders(settings.business_providers || [settings.hotel_provider])
+      setSelectedPeopleProviders(settings.people_providers || [])
     }).catch(() => {})
     fetchBusinessCategories()
       .then(setCategories)
@@ -177,12 +179,12 @@ function App() {
   }
 
   const handleFindManagers = async (hotel) => {
-    if (!providerSettings?.apollo_enabled || !providerSettings?.apollo_configured) return
+    if (!selectedPeopleProviders.length) return
     const key = hotel.id || hotel.place_id || `${hotel.osm_type}-${hotel.osm_id}`
     if (managerSearches[key]) return
     setManagerSearches((current) => ({ ...current, [key]: true }))
     try {
-      const result = await findDecisionMakers(hotel)
+      const result = await findDecisionMakers(hotel, selectedPeopleProviders)
       const contacts = normalizeDecisionMakers(result.contacts)
       setHotels((current) => current.map((item) => (
         (item.id || item.place_id || `${item.osm_type}-${item.osm_id}`) === key
@@ -227,13 +229,13 @@ function App() {
   }
 
   const handleBulkManagers = async () => {
-    if (!providerSettings?.apollo_enabled || !providerSettings?.apollo_configured) return
+    if (!selectedPeopleProviders.length) return
     if (!selectedHotels.length || selectedHotels.length > 10 || bulkManagerRunning) return
     setBulkManagerRunning(true)
     setBulkManagerError('')
     setBulkManagerSummary(null)
     try {
-      const data = await findDecisionMakersBulk(selectedHotels)
+      const data = await findDecisionMakersBulk(selectedHotels, selectedPeopleProviders)
       const resultsByIdentity = new Map()
       for (const result of data.results) {
         const identity = `${result.business_name || result.hotel_name}|${result.category || 'hotels_resorts'}`
@@ -328,6 +330,17 @@ function App() {
     <main className="app-shell">
       <AppHeader providerName={providerNames.join(' + ')} />
       <SearchPanel onLocationSelect={handleLocationSelect} values={searchValues} onValuesChange={handleSearchValuesChange} onSearch={handleSearch} loading={loading} selectedLocationName={selectedLocationName} categories={categories} selectedCategory={selectedCategory} onCategoryChange={handleCategoryChange} categoryLoadError={categoryLoadError} availableProviders={availableProviders} selectedProviders={selectedProviders} onProvidersChange={setSelectedProviders} />
+      <fieldset className="people-provider-selector">
+        <legend>Decision-maker providers</legend>
+        {(providerSettings?.people_providers || []).map((provider) => <label key={provider}>
+          <input type="checkbox" checked={selectedPeopleProviders.includes(provider)}
+            onChange={() => setSelectedPeopleProviders(selectedPeopleProviders.includes(provider)
+              ? selectedPeopleProviders.filter((item) => item !== provider)
+              : [...selectedPeopleProviders, provider])} />
+          {provider === 'zoominfo' ? 'ZoomInfo' : 'Apollo'}
+        </label>)}
+        {!providerSettings?.people_providers?.length && <span>Configure a people enrichment provider in Settings.</span>}
+      </fieldset>
       <div className="map-summary-workspace">
         <HotelMap location={{ latitude: searchValues.lat, longitude: searchValues.lng }} radius={searchValues.radius} hotels={hotels} onLocationChange={handleLocationChange} selectedHotel={selectedHotel} onSelectHotel={setSelectedHotel} />
         <SearchSummary locationName={selectedLocationName} radius={searchValues.radius} providerNames={providerNames} hotels={hotels} hasSearched={hasSearched} categoryName={categories.find((category) => category.id === selectedCategory)?.name || 'Hotels & Resorts'} />
@@ -385,7 +398,7 @@ function App() {
           </>
         )}
       </section>
-      <HotelDetailsDrawer hotel={drawerHotel} categoryName={categories.find((category) => category.id === selectedCategory)?.name || 'Business'} onClose={() => setDrawerHotelKey(null)} onEnrich={handleEnrich} onFindManagers={handleFindManagers} enriching={drawerHotel ? Boolean(enrichingHotels[hotelKey(drawerHotel)]) : false} findingManagers={drawerHotel ? Boolean(managerSearches[hotelKey(drawerHotel)]) : false} apolloEnabled={Boolean(providerSettings?.apollo_enabled)} apolloConfigured={Boolean(providerSettings?.apollo_configured)} enrichmentAvailable={selectedCategory === 'hotels_resorts'} />
+      <HotelDetailsDrawer hotel={drawerHotel} categoryName={categories.find((category) => category.id === selectedCategory)?.name || 'Business'} onClose={() => setDrawerHotelKey(null)} onEnrich={handleEnrich} onFindManagers={handleFindManagers} enriching={drawerHotel ? Boolean(enrichingHotels[hotelKey(drawerHotel)]) : false} findingManagers={drawerHotel ? Boolean(managerSearches[hotelKey(drawerHotel)]) : false} apolloEnabled={Boolean(selectedPeopleProviders.length)} apolloConfigured={Boolean(selectedPeopleProviders.length)} enrichmentAvailable={selectedCategory === 'hotels_resorts'} />
     </main>
   )
 }

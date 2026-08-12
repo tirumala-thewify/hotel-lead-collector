@@ -92,12 +92,28 @@ ROLE_PROFILES = {
     },
 }
 
+PRIMARY_ROLE_PROFILE = {
+    'IT Leadership': (
+        'IT Director', 'Director of IT', 'Director, Information Technology',
+        'Head of IT', 'Head of Information Technology', 'VP of IT',
+        'VP Information Technology',
+    ),
+    'IT Management': (
+        'IT Manager', 'Information Technology Manager', 'Infrastructure Manager',
+        'IT Infrastructure Manager', 'Technology Manager',
+    ),
+    'General Management': ('General Manager', 'Managing Director', 'Business General Manager'),
+    'Executive Technology': ('CIO', 'Chief Information Officer', 'CTO', 'Chief Technology Officer'),
+    'Operations Leadership': ('Director of Operations', 'Operations Director', 'Head of Operations'),
+}
+
 
 def get_role_profile(category):
     try:
-        return ROLE_PROFILES[category]
+        category_profile = ROLE_PROFILES[category]
     except (KeyError, TypeError) as exc:
         raise ValueError(f'Unknown business category: {category!r}.') from exc
+    return {**PRIMARY_ROLE_PROFILE, **category_profile}
 
 
 def get_search_titles(category):

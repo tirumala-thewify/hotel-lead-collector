@@ -22,6 +22,19 @@ def get_apollo_api_key(provider_settings=None):
     return provider_settings.get_apollo_api_key() or settings.APOLLO_API_KEY
 
 
+def get_zoominfo_api_key(provider_settings=None):
+    provider_settings = provider_settings or get_provider_settings()
+    return provider_settings.get_zoominfo_api_key() or settings.ZOOMINFO_API_KEY
+
+
+def get_people_providers(provider_settings=None):
+    provider_settings = provider_settings or get_provider_settings()
+    selected = provider_settings.people_providers
+    if not isinstance(selected, list) or (not selected and provider_settings.apollo_enabled):
+        selected = ['apollo'] if provider_settings.apollo_enabled else []
+    return list(dict.fromkeys(item for item in selected if item in {'apollo', 'zoominfo'}))
+
+
 def get_business_providers(provider_settings=None):
     provider_settings = provider_settings or get_provider_settings()
     selected = provider_settings.business_providers
@@ -40,4 +53,6 @@ def public_provider_settings(provider_settings=None):
         'geoapify_configured': bool(get_geoapify_api_key(provider_settings)),
         'apollo_enabled': provider_settings.apollo_enabled,
         'apollo_configured': bool(get_apollo_api_key(provider_settings)),
+        'people_providers': get_people_providers(provider_settings),
+        'zoominfo_configured': bool(get_zoominfo_api_key(provider_settings)),
     }

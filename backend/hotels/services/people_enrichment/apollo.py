@@ -56,7 +56,7 @@ def _role_group(title, category):
 
 
 def _legacy_department(role_group, category):
-    if category == 'hotels_resorts' and role_group == 'IT':
+    if category == 'hotels_resorts' and role_group in {'IT', 'IT Leadership', 'IT Management'}:
         return 'Information Technology'
     return role_group
 
@@ -206,6 +206,7 @@ class ApolloPeopleEnrichmentProvider(PeopleEnrichmentProvider):
         role_group = _role_group(title, category)
         if not role_group:
             return None
+        contact_role_group = 'IT' if role_group in {'IT Leadership', 'IT Management'} else role_group
 
         phone = None
         for phone_record in person.get('phone_numbers') or []:
@@ -214,9 +215,10 @@ class ApolloPeopleEnrichmentProvider(PeopleEnrichmentProvider):
                 if phone:
                     break
         return {
+            'provider_person_id': person.get('id') or fallback.get('id'),
             'name': person.get('name') or fallback.get('name'),
             'title': title,
-            'role_group': role_group,
+            'role_group': contact_role_group,
             'department': _legacy_department(role_group, category),
             'company': (person.get('organization') or {}).get('name') or organization_name,
             'organization_name': (person.get('organization') or {}).get('name') or organization_name,

@@ -29,8 +29,12 @@ from .services.providers.base import (
     UnsupportedBusinessCategoryError,
 )
 from .provider_settings import get_apollo_api_key, get_provider_settings
-from .services.people_enrichment import search_decision_makers
-from .services.people_enrichment.bulk import enrich_managers_bulk
+from .services.people_enrichment import (
+    search_decision_makers, search_decision_makers_multi_provider,
+)
+from .services.people_enrichment.bulk import (
+    enrich_managers_bulk, enrich_managers_multi_provider_bulk,
+)
 from .services.people_enrichment.base import (
     PeopleEnrichmentConfigurationError,
     PeopleEnrichmentError,
@@ -132,6 +136,19 @@ def enrich_managers(request):
     serializer.is_valid(raise_exception=True)
     params = serializer.validated_data
 
+    if 'providers' in params:
+        try:
+            return Response(search_decision_makers_multi_provider(
+                business={
+                    'name': params['name'], 'website': params.get('website'),
+                    'brand': params.get('brand'),
+                    'address': params.get('address') or params.get('location'),
+                    'latitude': params.get('latitude'), 'longitude': params.get('longitude'),
+                }, category=params['category'], providers=params['providers'],
+            ))
+        except PeopleEnrichmentError as exc:
+            return Response({'status': 'ERROR', 'message': str(exc)}, status=400)
+
     provider_settings = get_provider_settings()
     if not provider_settings.apollo_enabled:
         return Response({
@@ -177,6 +194,11 @@ def enrich_managers_bulk_api(request):
     serializer = BulkManagerEnrichmentSerializer(data=request.data)
     serializer.is_valid(raise_exception=True)
     hotels = serializer.validated_data['hotels']
+
+    if 'providers' in serializer.validated_data:
+        return Response(enrich_managers_multi_provider_bulk(
+            hotels, serializer.validated_data['providers'], get_provider_settings()
+        ))
 
     provider_settings = get_provider_settings()
     if not provider_settings.apollo_enabled:

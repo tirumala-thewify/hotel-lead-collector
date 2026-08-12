@@ -6,9 +6,8 @@ function BulkManagerActions({ selectedHotels, providerSettings, running, summary
   const [confirming, setConfirming] = useState(false)
   const count = selectedHotels.length
   const tooMany = count > MAX_BULK_BUSINESSES
-  const apolloEnabled = Boolean(providerSettings?.apollo_enabled)
-  const apolloConfigured = Boolean(providerSettings?.apollo_configured)
-  const canRun = count > 0 && !tooMany && apolloEnabled && apolloConfigured && !running
+  const peopleEnabled = Boolean(providerSettings?.people_providers?.length)
+  const canRun = count > 0 && !tooMany && peopleEnabled && !running
 
   return (
     <>
@@ -18,10 +17,8 @@ function BulkManagerActions({ selectedHotels, providerSettings, running, summary
           </button>
           <span className="action-note">{tooMany
             ? 'Maximum 10 businesses'
-            : !apolloEnabled
-              ? 'Apollo is disabled in Settings.'
-              : !apolloConfigured
-                ? 'Apollo API key is not configured.'
+            : !peopleEnabled
+              ? 'Configure a people enrichment provider in Settings.'
                 : error}</span>
       </div>
       {summary && (
@@ -37,7 +34,7 @@ function BulkManagerActions({ selectedHotels, providerSettings, running, summary
           <section className="confirmation-dialog" role="dialog" aria-modal="true" aria-labelledby="bulk-confirm-title">
             <h2 id="bulk-confirm-title">Find Decision Makers</h2>
             <p>Find decision-makers for {count} selected {count === 1 ? 'business' : 'businesses'}?</p>
-            <p>Some Apollo enrichment requests may consume credits.</p>
+            <p>People enrichment requests may consume provider credits.</p>
             <div className="confirmation-actions">
               <button type="button" onClick={() => setConfirming(false)}>Cancel</button>
               <button type="button" className="bulk-manager-button" onClick={() => { setConfirming(false); onRun() }}>

@@ -2,6 +2,7 @@ import logging
 
 from .apollo import search_decision_makers
 from .base import PeopleEnrichmentError
+from .orchestrator import search_decision_makers_multi_provider
 
 
 logger = logging.getLogger(__name__)
@@ -69,3 +70,27 @@ def enrich_managers_bulk(hotels, api_key):
         'errors': sum(result['status'] == 'ERROR' for result in results),
     }
     return {'results': results, 'summary': summary}
+
+
+def enrich_managers_multi_provider_bulk(hotels, providers, provider_settings):
+    results = []
+    for hotel in hotels:
+        try:
+            result = search_decision_makers_multi_provider(
+                hotel, hotel.get('category', 'hotels_resorts'), providers, provider_settings
+            )
+        except PeopleEnrichmentError:
+            result = {
+                'business_name': hotel['name'], 'hotel_name': hotel['name'],
+                'category': hotel.get('category', 'hotels_resorts'),
+                'status': 'ERROR', 'contacts': [], 'providers': providers,
+                'provider_results': {},
+            }
+        results.append(result)
+    summary = {
+        'requested': len(hotels), 'processed': len(results),
+        'found': sum(result['status'] in {'FOUND', 'PARTIAL'} for result in results),
+        'not_found': sum(result['status'] == 'NOT_FOUND' for result in results),
+        'errors': sum(result['status'] == 'ERROR' for result in results),
+    }
+    return {'results': results, 'summary': summary, 'providers': providers}

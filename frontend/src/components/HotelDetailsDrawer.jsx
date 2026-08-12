@@ -66,10 +66,10 @@ function HotelDetailsDrawer({ hotel, categoryName, onClose, onEnrich, onFindMana
               <strong>{value(contact.name)}</strong>
               <p>{value(contact.title)}</p>
               <dl className="decision-maker-contact">
-                <div><dt>Business Email</dt><dd>{contact.business_email || contact.email ? <a href={`mailto:${contact.business_email || contact.email}`}>{contact.business_email || contact.email}</a> : missing}</dd></div>
-                <div><dt>Work Phone</dt><dd>{value(contact.phone)}</dd></div>
+                <div><dt>Business Email</dt><dd>{contact.business_email || contact.email ? <><a href={`mailto:${contact.business_email || contact.email}`}>{contact.business_email || contact.email}</a><small>Source: {value(contact.business_email_source || contact.source)}</small></> : missing}</dd></div>
+                <div><dt>Work Phone</dt><dd>{value(contact.phone)}{contact.phone && <small>Source: {value(contact.phone_source || contact.source)}</small>}</dd></div>
                 <div><dt>LinkedIn</dt><dd>{contact.linkedin_url ? <a href={contact.linkedin_url} target="_blank" rel="noopener noreferrer">Open Profile</a> : missing}</dd></div>
-                <div><dt>Source</dt><dd>{value(contact.source)}</dd></div>
+                <div><dt>{contact.sources?.length > 1 ? 'Sources' : 'Source'}</dt><dd>{value(contact.sources?.join(' + ') || contact.source)}</dd></div>
               </dl>
             </article>
           )) : <p className="muted-copy">{statusMessage(hotel.manager_status)}</p>}

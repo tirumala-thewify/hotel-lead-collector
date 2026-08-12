@@ -133,7 +133,7 @@ export async function freeEnrichHotelsBulk(hotels) {
   return data
 }
 
-export async function findDecisionMakers(business) {
+export async function findDecisionMakers(business, providers) {
   let response
   try {
     response = await fetch(ENRICH_MANAGERS_URL, {
@@ -145,6 +145,7 @@ export async function findDecisionMakers(business) {
         brand: business.brand,
         address: business.address,
         category: business.category || 'hotels_resorts',
+        providers,
       }),
     })
   } catch {
@@ -166,13 +167,14 @@ export async function findDecisionMakers(business) {
   return data
 }
 
-export async function findDecisionMakersBulk(businesses) {
+export async function findDecisionMakersBulk(businesses, providers) {
   let response
   try {
     response = await fetch(BULK_ENRICH_MANAGERS_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
+        providers,
         hotels: businesses.map((business) => ({
           name: business.name,
           website: business.website,
