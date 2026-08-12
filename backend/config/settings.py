@@ -76,6 +76,9 @@ NOMINATIM_API_URL = os.getenv(
     'NOMINATIM_API_URL',
     'https://nominatim.openstreetmap.org/search',
 )
+PLAYWRIGHT_HEADLESS = os.getenv('PLAYWRIGHT_HEADLESS', 'true').casefold() not in {'0', 'false', 'no'}
+PLAYWRIGHT_TIMEOUT = int(os.getenv('PLAYWRIGHT_TIMEOUT', '15000'))
+PLAYWRIGHT_MAX_RESULTS = min(max(int(os.getenv('PLAYWRIGHT_MAX_RESULTS', '20')), 1), 50)
 
 ROOT_URLCONF = 'config.urls'
 

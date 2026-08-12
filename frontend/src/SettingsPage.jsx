@@ -94,6 +94,11 @@ function SettingsPage() {
             onChange={() => toggleProvider('google')} />
             <span><strong>Google Places <em className="inline-status">Optional</em></strong><small>Currently supports Hotels & Resorts · API key required</small></span>
           </label>
+          <label><input type="checkbox" value="playwright"
+            checked={settings.business_providers.includes('playwright')}
+            onChange={() => toggleProvider('playwright')} />
+            <span><strong>Browser Search <em className="inline-status">Experimental</em></strong><small>Headless browser discovery · No API key required</small></span>
+          </label>
         </div>
         <SecretInput id="geoapify-key" label="Geoapify API Key" value={geoapifyKey}
           onChange={setGeoapifyKey} placeholder={settings.geoapify_configured ? 'Saved key is hidden' : 'Enter API key'} />

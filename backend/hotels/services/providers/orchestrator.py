@@ -16,14 +16,16 @@ PROVIDER_LABELS = {
     ProviderSettings.OPENSTREETMAP: 'OpenStreetMap',
     ProviderSettings.GEOAPIFY: 'Geoapify',
     ProviderSettings.GOOGLE: 'Google Places',
+    ProviderSettings.PLAYWRIGHT: 'Browser Search',
 }
-PROVIDER_PRIORITY = ('google', 'geoapify', 'openstreetmap')
+PROVIDER_PRIORITY = ('google', 'geoapify', 'openstreetmap', 'playwright')
 PRIORITY_RANK = {provider: index for index, provider in enumerate(PROVIDER_PRIORITY)}
 DEDUPLICATION_DISTANCE_KM = 0.1
 MERGE_FIELDS = (
     'address', 'latitude', 'longitude', 'distance_km', 'phone', 'email',
     'website', 'brand', 'stars', 'category', 'google_maps_url', 'wikidata',
-    'wikipedia', 'contact_website', 'brand_website',
+    'wikipedia', 'contact_website', 'brand_website', 'rating', 'review_count',
+    'opening_hours', 'maps_url',
 )
 GENERIC_NAMES = {
     'hospital', 'restaurant', 'hotel', 'resort', 'cafe', 'school', 'university',

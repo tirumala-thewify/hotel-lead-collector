@@ -1,10 +1,11 @@
 import { useEffect } from 'react'
+import { displayBusinessValue } from '../businessIdentity.js'
 
 const missing = 'Not Available'
 const fields = ['phone', 'email', 'website', 'address', 'brand']
 
 function value(item) {
-  return item === null || item === undefined || item === '' ? missing : item
+  return displayBusinessValue(item, missing)
 }
 
 function statusMessage(status) {

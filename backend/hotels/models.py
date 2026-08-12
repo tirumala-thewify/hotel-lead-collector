@@ -15,10 +15,12 @@ class ProviderSettings(models.Model):
     OPENSTREETMAP = 'openstreetmap'
     GEOAPIFY = 'geoapify'
     GOOGLE = 'google'
+    PLAYWRIGHT = 'playwright'
     HOTEL_PROVIDER_CHOICES = [
         (OPENSTREETMAP, 'OpenStreetMap'),
         (GEOAPIFY, 'Geoapify'),
         (GOOGLE, 'Google Places'),
+        (PLAYWRIGHT, 'Browser Search (Playwright)'),
     ]
 
     hotel_provider = models.CharField(

@@ -9,6 +9,8 @@ import {
   useMap,
   useMapEvents,
 } from 'react-leaflet'
+import { businessCoordinates, mappableBusinesses } from './mapCoordinates.js'
+import { businessKey } from '../businessIdentity.js'
 
 const searchIcon = L.divIcon({
   className: 'search-map-marker',
@@ -38,11 +40,12 @@ function MapController({ center, selectedHotel, markerRefs }) {
     map.setView(center, map.getZoom(), { animate: true })
   }, [center, map])
   useEffect(() => {
-    if (!selectedHotel?.latitude || !selectedHotel?.longitude) return
-    map.setView([selectedHotel.latitude, selectedHotel.longitude], Math.max(map.getZoom(), 15), {
+    const coordinates = businessCoordinates(selectedHotel)
+    if (!coordinates) return
+    map.setView(coordinates, Math.max(map.getZoom(), 15), {
       animate: true,
     })
-    markerRefs.current.get(selectedHotel.id)?.openPopup()
+    markerRefs.current.get(businessKey(selectedHotel))?.openPopup()
   }, [map, markerRefs, selectedHotel])
   return null
 }
@@ -54,9 +57,7 @@ function available(value) {
 function HotelMap({ location, radius, hotels, onLocationChange, selectedHotel, onSelectHotel }) {
   const markerRefs = useRef(new Map())
   const center = useMemo(() => [Number(location.latitude), Number(location.longitude)], [location])
-  const mapHotels = hotels.filter((hotel) => (
-    Number.isFinite(Number(hotel.latitude)) && Number.isFinite(Number(hotel.longitude))
-  )).slice(0, 100)
+  const mapHotels = mappableBusinesses(hotels)
 
   return (
     <section className="map-card" aria-label="Business location map">
@@ -76,13 +77,13 @@ function HotelMap({ location, radius, hotels, onLocationChange, selectedHotel, o
             Radius: {(Number(radius) / 1000).toFixed(0)} km
           </Popup>
         </Marker>
-        {mapHotels.map((hotel) => (
+        {mapHotels.map(({ business: hotel, coordinates }) => (
           <Marker
-            key={hotel.id || hotel.place_id}
-            position={[hotel.latitude, hotel.longitude]}
+            key={businessKey(hotel)}
+            position={coordinates}
             icon={hotelIcon}
             ref={(marker) => {
-              const key = hotel.id || hotel.place_id
+              const key = businessKey(hotel)
               if (marker) markerRefs.current.set(key, marker)
               else markerRefs.current.delete(key)
             }}

@@ -20,6 +20,7 @@ import {
 } from './services/hotelService.js'
 import './index.css'
 import { fetchProviderSettings } from './services/providerSettingsService.js'
+import { businessKey } from './businessIdentity.js'
 
 function decisionMakerKey(contact) {
   return contact.id || [
@@ -79,7 +80,7 @@ function App() {
   const [categories, setCategories] = useState(defaultCategories)
   const [selectedCategory, setSelectedCategory] = useState('hotels_resorts')
   const [categoryLoadError, setCategoryLoadError] = useState('')
-  const providerLabels = { openstreetmap: 'OpenStreetMap', geoapify: 'Geoapify', google: 'Google Places' }
+  const providerLabels = { openstreetmap: 'OpenStreetMap', geoapify: 'Geoapify', google: 'Google Places', playwright: 'Browser Search' }
   const availableProviders = (providerSettings?.business_providers || []).map((id) => ({ id, name: providerLabels[id] }))
   const providerNames = (searchedProviders.length ? searchedProviders : selectedProviders)
     .map((provider) => providerLabels[provider])
@@ -180,14 +181,14 @@ function App() {
 
   const handleFindManagers = async (hotel) => {
     if (!selectedPeopleProviders.length) return
-    const key = hotel.id || hotel.place_id || `${hotel.osm_type}-${hotel.osm_id}`
+    const key = businessKey(hotel)
     if (managerSearches[key]) return
     setManagerSearches((current) => ({ ...current, [key]: true }))
     try {
       const result = await findDecisionMakers(hotel, selectedPeopleProviders)
       const contacts = normalizeDecisionMakers(result.contacts)
       setHotels((current) => current.map((item) => (
-        (item.id || item.place_id || `${item.osm_type}-${item.osm_id}`) === key
+        businessKey(item) === key
           ? {
               ...item,
               decision_makers: contacts,
@@ -199,7 +200,7 @@ function App() {
       )))
     } catch {
       setHotels((current) => current.map((item) => (
-        (item.id || item.place_id || `${item.osm_type}-${item.osm_id}`) === key
+        businessKey(item) === key
           ? {
               ...item,
               decision_makers: [],
@@ -214,9 +215,8 @@ function App() {
     }
   }
 
-  const hotelKey = (hotel) => hotel.id || hotel.place_id || `${hotel.osm_type}-${hotel.osm_id}`
-  const selectedHotels = hotels.filter((hotel) => selectedHotelKeys.includes(hotelKey(hotel)))
-  const drawerHotel = hotels.find((hotel) => hotelKey(hotel) === drawerHotelKey) || null
+  const selectedHotels = hotels.filter((hotel) => selectedHotelKeys.includes(businessKey(hotel)))
+  const drawerHotel = hotels.find((hotel) => businessKey(hotel) === drawerHotelKey) || null
 
   const handleToggleHotel = (key) => {
     setSelectedHotelKeys((current) => current.includes(key)
@@ -225,7 +225,7 @@ function App() {
   }
 
   const handleSelectAll = (checked) => {
-    setSelectedHotelKeys(checked ? hotels.map(hotelKey) : [])
+    setSelectedHotelKeys(checked ? hotels.map(businessKey) : [])
   }
 
   const handleBulkManagers = async () => {
@@ -244,7 +244,7 @@ function App() {
         resultsByIdentity.set(identity, matches)
       }
       setHotels((current) => current.map((hotel) => {
-        if (!selectedHotelKeys.includes(hotelKey(hotel))) return hotel
+        if (!selectedHotelKeys.includes(businessKey(hotel))) return hotel
         const identity = `${hotel.name}|${hotel.category || 'hotels_resorts'}`
         const result = resultsByIdentity.get(identity)?.shift()
         if (!result) return hotel
@@ -276,7 +276,7 @@ function App() {
       const resultsByName = new Map(data.results.map((result) => [result.hotel_name, result]))
       setHotels((current) => current.map((hotel) => {
         const result = resultsByName.get(hotel.name)
-        if (!result || !selectedHotelKeys.includes(hotelKey(hotel))) return hotel
+        if (!result || !selectedHotelKeys.includes(businessKey(hotel))) return hotel
         return {
           ...hotel,
           ...result.hotel,
@@ -296,14 +296,14 @@ function App() {
 
   const handleEnrich = async (hotel) => {
     if (selectedCategory !== 'hotels_resorts') return
-    const key = hotel.id || hotel.place_id || `${hotel.osm_type}-${hotel.osm_id}`
+    const key = businessKey(hotel)
     if (enrichingHotels[key]) return
     setEnrichingHotels((current) => ({ ...current, [key]: true }))
 
     try {
       const enriched = await enrichHotel(hotel)
       setHotels((current) => current.map((item) => {
-        if ((item.id || item.place_id || `${item.osm_type}-${item.osm_id}`) !== key) return item
+        if (businessKey(item) !== key) return item
         return {
           ...item,
           phone: enriched.phone || item.phone,
@@ -317,7 +317,7 @@ function App() {
       }))
     } catch (enrichmentError) {
       setHotels((current) => current.map((item) => (
-        (item.id || item.place_id || `${item.osm_type}-${item.osm_id}`) === key
+        businessKey(item) === key
           ? { ...item, enrichment_status: 'ERROR', enrichment_message: enrichmentError.message }
           : item
       )))
@@ -393,12 +393,12 @@ function App() {
               onToggleHotel={handleToggleHotel}
               selectedHotel={selectedHotel}
               onSelectHotel={setSelectedHotel}
-              onView={(hotel) => setDrawerHotelKey(hotelKey(hotel))}
+              onView={(hotel) => setDrawerHotelKey(businessKey(hotel))}
             />
           </>
         )}
       </section>
-      <HotelDetailsDrawer hotel={drawerHotel} categoryName={categories.find((category) => category.id === selectedCategory)?.name || 'Business'} onClose={() => setDrawerHotelKey(null)} onEnrich={handleEnrich} onFindManagers={handleFindManagers} enriching={drawerHotel ? Boolean(enrichingHotels[hotelKey(drawerHotel)]) : false} findingManagers={drawerHotel ? Boolean(managerSearches[hotelKey(drawerHotel)]) : false} apolloEnabled={Boolean(selectedPeopleProviders.length)} apolloConfigured={Boolean(selectedPeopleProviders.length)} enrichmentAvailable={selectedCategory === 'hotels_resorts'} />
+      <HotelDetailsDrawer hotel={drawerHotel} categoryName={categories.find((category) => category.id === selectedCategory)?.name || 'Business'} onClose={() => setDrawerHotelKey(null)} onEnrich={handleEnrich} onFindManagers={handleFindManagers} enriching={drawerHotel ? Boolean(enrichingHotels[businessKey(drawerHotel)]) : false} findingManagers={drawerHotel ? Boolean(managerSearches[businessKey(drawerHotel)]) : false} apolloEnabled={Boolean(selectedPeopleProviders.length)} apolloConfigured={Boolean(selectedPeopleProviders.length)} enrichmentAvailable={selectedCategory === 'hotels_resorts'} />
     </main>
   )
 }

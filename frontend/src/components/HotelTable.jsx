@@ -1,7 +1,9 @@
+import { businessKey, displayBusinessValue } from '../businessIdentity.js'
+
 const missingValue = '—'
 
 function display(value) {
-  return value === null || value === undefined || value === '' ? missingValue : value
+  return displayBusinessValue(value, missingValue)
 }
 
 function contactQuality(hotel) {
@@ -14,7 +16,7 @@ function contactQuality(hotel) {
 
 function HotelTable({ hotels, selectedHotelKeys, onToggleHotel, selectedHotel, onSelectHotel, onView }) {
   const selectedKey = selectedHotel
-    ? selectedHotel.id || selectedHotel.place_id || `${selectedHotel.osm_type}-${selectedHotel.osm_id}`
+    ? businessKey(selectedHotel)
     : null
   return (
     <div className="table-card">
@@ -26,7 +28,7 @@ function HotelTable({ hotels, selectedHotelKeys, onToggleHotel, selectedHotel, o
             <th scope="col">Phone</th><th scope="col">Email</th><th scope="col">Contact Status</th><th scope="col">Action</th>
           </tr></thead>
           <tbody>{hotels.map((hotel, index) => {
-            const key = hotel.id || hotel.place_id || `${hotel.osm_type}-${hotel.osm_id}`
+            const key = businessKey(hotel)
             const quality = contactQuality(hotel)
             return <tr key={key} className={selectedKey === key ? 'selected-hotel-row' : ''} onClick={() => onSelectHotel(hotel)}>
               <td className="selection-cell"><input type="checkbox" aria-label={`Select ${hotel.name}`} checked={selectedHotelKeys.includes(key)} onClick={(event) => event.stopPropagation()} onChange={() => onToggleHotel(key)} /></td>

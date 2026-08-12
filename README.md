@@ -17,6 +17,7 @@ Hotel Lead Collector is a Django + React application for discovering hotels near
 \- OpenStreetMap / Overpass hotel discovery
 
 \- Google Places provider support
+\- Optional experimental Playwright browser-search provider
 
 \- Hotel address, phone, email and website information
 
@@ -265,4 +266,17 @@ API keys are handled by the Django backend and are not exposed directly to the R
 
 
 Real `.env` files, virtual environments, databases, build files and Node modules are excluded from Git.
+
+\## Optional Playwright Provider
+
+The browser-search provider runs only in Django and requires a matching Chromium runtime:
+
+`pip install -r backend/requirements.txt`
+
+`python -m playwright install chromium`
+
+Configure `PLAYWRIGHT_HEADLESS`, `PLAYWRIGHT_TIMEOUT` (milliseconds), and
+`PLAYWRIGHT_MAX_RESULTS` in `backend/.env`. Browser automation against third-party
+pages is experimental: page structure, rate limits, CAPTCHAs, blocking, availability,
+and applicable terms may prevent searches. The provider does not bypass these controls.
 

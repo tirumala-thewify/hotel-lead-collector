@@ -8,6 +8,7 @@ from hotels.provider_settings import (
 from .geoapify_provider import GeoapifyProvider
 from .google_provider import GooglePlacesProvider
 from .openstreetmap_provider import OpenStreetMapProvider
+from .playwright_provider import PlaywrightProvider
 
 
 def get_hotel_provider(provider_settings=None):
@@ -16,6 +17,8 @@ def get_hotel_provider(provider_settings=None):
         return GeoapifyProvider(get_geoapify_api_key(provider_settings))
     if provider_settings.hotel_provider == ProviderSettings.GOOGLE:
         return GooglePlacesProvider(get_google_api_key(provider_settings))
+    if provider_settings.hotel_provider == ProviderSettings.PLAYWRIGHT:
+        return PlaywrightProvider()
     return OpenStreetMapProvider()
 
 
@@ -27,4 +30,6 @@ def get_business_provider(provider_name, provider_settings=None):
         return GooglePlacesProvider(get_google_api_key(provider_settings))
     if provider_name == ProviderSettings.OPENSTREETMAP:
         return OpenStreetMapProvider()
+    if provider_name == ProviderSettings.PLAYWRIGHT:
+        return PlaywrightProvider()
     raise ValueError('Unsupported business data provider.')
