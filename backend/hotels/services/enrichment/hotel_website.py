@@ -3,7 +3,7 @@ import json
 import re
 import socket
 from html.parser import HTMLParser
-from urllib.parse import urljoin, urlparse
+from urllib.parse import urljoin, urlparse, urlunparse
 
 import requests
 
@@ -16,10 +16,42 @@ REQUEST_TIMEOUT_SECONDS = 10
 MAX_REDIRECTS = 3
 MAX_PAGES = 3
 MAX_RESPONSE_BYTES = 1_000_000
-CONTACT_LINK_MARKERS = (
-    'contact', 'contact-us', 'contact us', 'reach-us', 'reach us', 'location',
-    'hotel-info', 'hotel info', 'about', 'reservations',
+PAGE_LINK_MARKERS = {
+    'contact': ('contact', 'contact-us', 'contact us', 'reach-us', 'reach us',
+                'location', 'hotel-info', 'hotel info', 'reservations'),
+    'about': ('about', 'about-us', 'about us', 'corporate'),
+    'team': ('team', 'our-team', 'our team'),
+    'leadership': ('leadership', 'executive', 'executives'),
+    'management': ('management', 'managers'),
+    'sales': (
+        'sales', 'sales-team', 'corporate-sales', 'group-sales', 'meetings-sales',
+        'events-sales', 'business-sales', 'contact-sales',
+    ),
+    'press': ('press', 'news', 'media'),
+}
+CONTACT_LINK_MARKERS = tuple(
+    marker for markers in PAGE_LINK_MARKERS.values() for marker in markers
 )
+SALES_NEGATIVE_MARKERS = (
+    'terms', 'conditions', 'terms and conditions', 'legal', 'policy', 'privacy',
+    'sales conditions', 'internet sales conditions',
+)
+SOCIAL_DOMAINS = {
+    'linkedin': 'linkedin.com',
+    'facebook': 'facebook.com',
+    'instagram': 'instagram.com',
+}
+SOCIAL_REJECTED_PATH_PARTS = {
+    'linkedin': {'login', 'sharing', 'sharearticle', 'intent', 'oauth', 'checkpoint'},
+    'facebook': {
+        'login', 'login.php', 'sharer', 'sharer.php', 'share', 'share.php',
+        'dialog', 'intent', 'plugins',
+    },
+    'instagram': {'accounts', 'login', 'share', 'oauth'},
+}
+SOCIAL_ALLOWED_PATH_PREFIXES = {
+    'linkedin': {'company', 'in', 'school', 'showcase'},
+}
 BUSINESS_EMAIL_PREFIXES = {
     'info', 'reservations', 'reservation', 'sales', 'contact', 'frontoffice',
     'frontdesk', 'reception', 'booking', 'bookings', 'enquiries', 'inquiries',
@@ -286,20 +318,86 @@ def _extract_contacts(html, allowed_domain=None, allow_domain_email=False):
     return result, parser.links
 
 
-def _contact_links(base_url, links):
+def _page_category(path, anchor_text):
+    haystack = re.sub(
+        r'[^a-z0-9]+', ' ', f'{path} {anchor_text}'.casefold()
+    ).strip()
+    sales_markers = tuple(
+        marker.replace('-', ' ') for marker in PAGE_LINK_MARKERS['sales']
+    )
+    if not any(marker in haystack for marker in SALES_NEGATIVE_MARKERS):
+        tokens = set(haystack.split())
+        if 'sales' in tokens or any(
+            marker != 'sales' and marker in haystack for marker in sales_markers
+        ):
+            return 'sales'
+    for category, markers in PAGE_LINK_MARKERS.items():
+        if category == 'sales':
+            continue
+        normalized_markers = tuple(marker.replace('-', ' ') for marker in markers)
+        if any(marker in haystack for marker in normalized_markers):
+            return category
+    return None
+
+
+def _discover_pages(base_url, links):
     base_host = (urlparse(base_url).hostname or '').lower()
     candidates = []
+    discovered = {category: None for category in PAGE_LINK_MARKERS}
     for link, anchor_text in links:
         absolute = urljoin(base_url, link)
         parsed = urlparse(absolute)
         if (parsed.hostname or '').lower() != base_host:
             continue
-        haystack = f'{parsed.path} {anchor_text}'.lower().replace('_', ' ')
-        priorities = [index for index, marker in enumerate(CONTACT_LINK_MARKERS) if marker in haystack]
-        if priorities and all(candidate[1] != absolute for candidate in candidates):
-            candidates.append((min(priorities), absolute))
+        category = _page_category(parsed.path, anchor_text)
+        if not category:
+            continue
+        normalized = urlunparse(parsed._replace(fragment=''))
+        discovered[category] = discovered[category] or normalized
+        priority = list(PAGE_LINK_MARKERS).index(category)
+        if all(candidate[1] != normalized for candidate in candidates):
+            candidates.append((priority, normalized))
     candidates.sort(key=lambda candidate: candidate[0])
-    return [url for _, url in candidates[: MAX_PAGES - 1]]
+    return discovered, [url for _, url in candidates[: MAX_PAGES - 1]]
+
+
+def _social_profile_url(value):
+    try:
+        parsed = urlparse(value)
+        port = parsed.port
+    except (TypeError, ValueError):
+        return None, None
+    if parsed.scheme not in {'http', 'https'} or not parsed.hostname or port not in {None, 80, 443}:
+        return None, None
+    if parsed.username or parsed.password:
+        return None, None
+    hostname = parsed.hostname.casefold().rstrip('.')
+    platform = next((
+        name for name, domain in SOCIAL_DOMAINS.items()
+        if hostname == domain or hostname.endswith(f'.{domain}')
+    ), None)
+    if not platform:
+        return None, None
+    path_parts = [part.casefold() for part in parsed.path.split('/') if part]
+    if not path_parts or any(
+        part in SOCIAL_REJECTED_PATH_PARTS[platform] for part in path_parts
+    ):
+        return None, None
+    allowed_prefixes = SOCIAL_ALLOWED_PATH_PREFIXES.get(platform)
+    if allowed_prefixes and path_parts[0] not in allowed_prefixes:
+        return None, None
+    normalized_path = parsed.path.rstrip('/') or '/'
+    normalized = urlunparse(('https', hostname, normalized_path, '', parsed.query, ''))
+    return platform, normalized
+
+
+def _extract_social_profiles(base_url, links):
+    profiles = {platform: None for platform in SOCIAL_DOMAINS}
+    for link, _anchor_text in links:
+        platform, profile_url = _social_profile_url(urljoin(base_url, link))
+        if platform and not profiles[platform]:
+            profiles[platform] = profile_url
+    return profiles
 
 
 class HotelWebsiteEnrichmentProvider(HotelEnrichmentProvider):
@@ -316,6 +414,7 @@ class HotelWebsiteEnrichmentProvider(HotelEnrichmentProvider):
             domain_hint=hotel.get('domain_hint'),
             wikidata=hotel.get('wikidata'),
             wikipedia=hotel.get('wikipedia'),
+            source=hotel.get('source'),
         )
         website = discovery['website']
         if not website:
@@ -327,6 +426,9 @@ class HotelWebsiteEnrichmentProvider(HotelEnrichmentProvider):
                 'address': None,
                 'brand': None,
                 'source_urls': [],
+                'discovered_pages': {category: None for category in PAGE_LINK_MARKERS},
+                'social_profiles': {platform: None for platform in SOCIAL_DOMAINS},
+                'social_profile_sources': {platform: None for platform in SOCIAL_DOMAINS},
                 'sources': {'website': None, 'phone': None, 'email': None, 'address': None, 'brand': None},
                 'website_confidence': discovery.get('confidence'),
                 'status': 'NOT_FOUND',
@@ -342,6 +444,9 @@ class HotelWebsiteEnrichmentProvider(HotelEnrichmentProvider):
             'address': None,
             'brand': None,
             'source_urls': [],
+            'discovered_pages': {category: None for category in PAGE_LINK_MARKERS},
+            'social_profiles': {platform: None for platform in SOCIAL_DOMAINS},
+            'social_profile_sources': {platform: None for platform in SOCIAL_DOMAINS},
             'sources': {
                 'website': discovery['source'],
                 'phone': None,
@@ -357,8 +462,14 @@ class HotelWebsiteEnrichmentProvider(HotelEnrichmentProvider):
         pages = [(final_home_url, home_html)]
         website_domain = (urlparse(final_home_url).hostname or '').removeprefix('www.')
         _, home_links = _extract_contacts(home_html, allowed_domain=website_domain)
-        for contact_url in _contact_links(final_home_url, home_links):
-            pages.append(_fetch_html(contact_url))
+        result['discovered_pages'], page_urls = _discover_pages(final_home_url, home_links)
+        for page_url in page_urls:
+            try:
+                pages.append(_fetch_html(page_url))
+            except EnrichmentError:
+                # Optional pages must not discard data already obtained from the
+                # homepage or another successfully fetched same-domain page.
+                continue
 
         for source_url, html in pages:
             page_path = urlparse(source_url).path.lower()
@@ -366,7 +477,7 @@ class HotelWebsiteEnrichmentProvider(HotelEnrichmentProvider):
                 marker.replace(' ', '-') in page_path.replace('_', '-')
                 for marker in CONTACT_LINK_MARKERS
             )
-            contacts, _ = _extract_contacts(
+            contacts, links = _extract_contacts(
                 html,
                 allowed_domain=website_domain,
                 allow_domain_email=is_contact_page,
@@ -377,8 +488,15 @@ class HotelWebsiteEnrichmentProvider(HotelEnrichmentProvider):
                     result[field] = contacts[field]
                     result['sources'][field] = source_url
                     found_on_page = True
+            social_profiles = _extract_social_profiles(source_url, links)
+            for platform, profile_url in social_profiles.items():
+                if profile_url and not result['social_profiles'][platform]:
+                    result['social_profiles'][platform] = profile_url
+                    result['social_profile_sources'][platform] = source_url
+                    found_on_page = True
             if found_on_page:
-                result['source_urls'].append(source_url)
+                if source_url not in result['source_urls']:
+                    result['source_urls'].append(source_url)
 
         found_count = sum(bool(result[field]) for field in CORE_CONTACT_FIELDS)
         if found_count == len(CORE_CONTACT_FIELDS):

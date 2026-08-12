@@ -121,6 +121,11 @@ function SettingsPage() {
           </span>
         </div>
         <label className="toggle-row">
+          <input type="checkbox" checked={settings.people_providers.includes('official_website')}
+            onChange={() => togglePeopleProvider('official_website')} />
+          <span><strong>Official Website</strong><small>Free · No API key required</small></span>
+        </label>
+        <label className="toggle-row">
           <input type="checkbox" checked={settings.people_providers.includes('apollo')}
             disabled={!settings.apollo_configured} onChange={() => togglePeopleProvider('apollo')} />
           <span><strong>Apollo</strong><small>{settings.apollo_configured ? 'Configured' : 'Not configured'}</small></span>

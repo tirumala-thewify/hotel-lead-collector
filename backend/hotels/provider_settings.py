@@ -32,7 +32,9 @@ def get_people_providers(provider_settings=None):
     selected = provider_settings.people_providers
     if not isinstance(selected, list) or (not selected and provider_settings.apollo_enabled):
         selected = ['apollo'] if provider_settings.apollo_enabled else []
-    return list(dict.fromkeys(item for item in selected if item in {'apollo', 'zoominfo'}))
+    return list(dict.fromkeys(
+        item for item in selected if item in {'official_website', 'apollo', 'zoominfo'}
+    ))
 
 
 def get_business_providers(provider_settings=None):

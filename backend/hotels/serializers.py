@@ -70,7 +70,7 @@ class ManagerEnrichmentSerializer(serializers.Serializer):
         choices=tuple(BUSINESS_CATEGORIES), default='hotels_resorts', required=False
     )
     providers = serializers.ListField(
-        child=serializers.ChoiceField(choices=('apollo', 'zoominfo')),
+        child=serializers.ChoiceField(choices=('official_website', 'apollo', 'zoominfo')),
         allow_empty=False, required=False,
     )
 
@@ -91,7 +91,7 @@ class BulkManagerEnrichmentSerializer(serializers.Serializer):
     hotels = BulkManagerHotelSerializer(many=True, allow_empty=False, max_length=10, required=False)
     businesses = BulkManagerHotelSerializer(many=True, allow_empty=False, max_length=10, required=False)
     providers = serializers.ListField(
-        child=serializers.ChoiceField(choices=('apollo', 'zoominfo')),
+        child=serializers.ChoiceField(choices=('official_website', 'apollo', 'zoominfo')),
         allow_empty=False, required=False,
     )
 

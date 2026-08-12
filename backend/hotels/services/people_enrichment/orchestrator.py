@@ -7,11 +7,16 @@ from .providers import get_people_provider
 from .role_profiles import get_role_profile
 
 
-PEOPLE_PROVIDER_LABELS = {'apollo': 'Apollo', 'zoominfo': 'ZoomInfo'}
+PEOPLE_PROVIDER_LABELS = {
+    'official_website': 'Official Website', 'apollo': 'Apollo', 'zoominfo': 'ZoomInfo',
+}
 # Deterministic fallback only when providers expose no comparable verification signal.
-PEOPLE_PROVIDER_PRIORITY = ('apollo', 'zoominfo')
+PEOPLE_PROVIDER_PRIORITY = ('apollo', 'zoominfo', 'official_website')
 PRIORITY = {provider: index for index, provider in enumerate(PEOPLE_PROVIDER_PRIORITY)}
-CONTACT_FIELDS = ('name', 'title', 'role_group', 'organization_name', 'business_email', 'phone', 'linkedin_url')
+CONTACT_FIELDS = (
+    'name', 'title', 'role_group', 'organization_name', 'business_email', 'phone',
+    'linkedin_url', 'source_url', 'confidence',
+)
 VERIFIED_VALUES = {'verified', 'valid', 'validated', 'confirmed'}
 
 
@@ -72,6 +77,10 @@ def _merge(first, second):
 
 
 def _role_rank(contact, category):
+    if contact.get('role_group') == 'general_manager':
+        return 0
+    if contact.get('role_group') == 'sales':
+        return 1
     profile = get_role_profile(category)
     groups = list(profile)
     try:

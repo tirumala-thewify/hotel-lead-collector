@@ -60,6 +60,199 @@ class HotelWebsiteEnrichmentTests(SimpleTestCase):
         self.assertEqual(mock_get.call_count, 3)
 
     @patch('hotels.services.enrichment.hotel_website.requests.get')
+    def test_secondary_404_preserves_homepage_data(self, mock_get, mock_dns):
+        mock_get.side_effect = [
+            html_response('<a href="/contact">Contact</a>'
+                          '<a href="mailto:info@hotel.example">Email</a>'),
+            html_response('', status=404),
+        ]
+        result = enrich_hotel_from_website(self.hotel)
+        self.assertEqual(result['email'], 'info@hotel.example')
+        self.assertEqual(result['status'], 'PARTIAL')
+
+    @patch('hotels.services.enrichment.hotel_website.requests.get')
+    def test_secondary_timeout_preserves_homepage_data(self, mock_get, mock_dns):
+        mock_get.side_effect = [
+            html_response('<a href="/contact">Contact</a>'
+                          '<a href="tel:+91 1234567890">Call</a>'),
+            requests.Timeout,
+        ]
+        result = enrich_hotel_from_website(self.hotel)
+        self.assertEqual(result['phone'], '+91 1234567890')
+        self.assertEqual(result['status'], 'PARTIAL')
+
+    @patch('hotels.services.enrichment.hotel_website.requests.get')
+    def test_secondary_403_preserves_homepage_data(self, mock_get, mock_dns):
+        mock_get.side_effect = [
+            html_response('<a href="/contact">Contact</a><address>Delhi</address>'),
+            html_response('', status=403),
+        ]
+        result = enrich_hotel_from_website(self.hotel)
+        self.assertEqual(result['address'], 'Delhi')
+        self.assertEqual(result['status'], 'PARTIAL')
+
+    @patch('hotels.services.enrichment.hotel_website.requests.get')
+    def test_one_secondary_failure_does_not_discard_another_success(self, mock_get, mock_dns):
+        mock_get.side_effect = [
+            html_response('<a href="/contact">Contact</a><a href="/about">About</a>'),
+            html_response('', status=404),
+            html_response('<a href="mailto:info@hotel.example">Email</a>'),
+        ]
+        result = enrich_hotel_from_website(self.hotel)
+        self.assertEqual(result['email'], 'info@hotel.example')
+        self.assertEqual(result['sources']['email'], 'https://hotel.example/about')
+        self.assertEqual(mock_get.call_count, 3)
+
+    @patch('hotels.services.enrichment.hotel_website.requests.get')
+    def test_root_failure_still_raises(self, mock_get, mock_dns):
+        mock_get.return_value = html_response('', status=403)
+        with self.assertRaisesMessage(EnrichmentError, 'HTTP 403'):
+            enrich_hotel_from_website(self.hotel)
+
+    @patch('hotels.services.enrichment.hotel_website.requests.get')
+    def test_sales_classification_uses_positive_and_negative_context(self, mock_get, mock_dns):
+        home = '''
+          <a href="/sales">Sales</a>
+          <a href="/corporate-sales">Corporate Sales</a>
+          <a href="/group-sales">Group Sales</a>
+          <a href="/information/legal/internet-sales-conditions.en.shtml">Terms</a>
+          <a href="/legal/sales-conditions">Sales conditions</a>
+        '''
+        mock_get.side_effect = [
+            html_response(home), html_response(''), html_response(''),
+        ]
+        result = enrich_hotel_from_website(self.hotel)
+        self.assertEqual(result['discovered_pages']['sales'], 'https://hotel.example/sales')
+        self.assertNotIn('conditions', result['discovered_pages']['sales'])
+
+    @patch('hotels.services.enrichment.hotel_website.requests.get')
+    def test_corporate_and_group_sales_are_classified(self, mock_get, mock_dns):
+        for path in ('corporate-sales', 'group-sales'):
+            with self.subTest(path=path):
+                mock_get.reset_mock()
+                mock_get.side_effect = [
+                    html_response(f'<a href="/{path}">{path}</a>'), html_response(''),
+                ]
+                result = enrich_hotel_from_website(self.hotel)
+                self.assertEqual(
+                    result['discovered_pages']['sales'], f'https://hotel.example/{path}'
+                )
+
+    @patch('hotels.services.enrichment.hotel_website.requests.get')
+    def test_legal_sales_condition_pages_are_not_classified(self, mock_get, mock_dns):
+        for path in (
+            'information/legal/internet-sales-conditions.en.shtml',
+            'legal/sales-conditions',
+        ):
+            with self.subTest(path=path):
+                mock_get.reset_mock()
+                mock_get.return_value = html_response(
+                    f'<a href="/{path}">Sales terms</a>'
+                )
+                result = enrich_hotel_from_website(self.hotel)
+                self.assertIsNone(result['discovered_pages']['sales'])
+                mock_get.assert_called_once()
+
+    @patch('hotels.services.enrichment.hotel_website.requests.get')
+    def test_useful_page_discovery(self, mock_get, mock_dns):
+        home = '''
+          <a href="/contact-us">Contact</a><a href="/about-us">About</a>
+          <a href="/our-team">Our Team</a><a href="/leadership">Leadership</a>
+          <a href="/management">Management</a><a href="/sales">Sales</a>
+          <a href="/news">News</a>
+        '''
+        mock_get.side_effect = [html_response(home), html_response(''), html_response('')]
+        result = enrich_hotel_from_website(self.hotel)
+        self.assertEqual(result['discovered_pages'], {
+            'contact': 'https://hotel.example/contact-us',
+            'about': 'https://hotel.example/about-us',
+            'team': 'https://hotel.example/our-team',
+            'leadership': 'https://hotel.example/leadership',
+            'management': 'https://hotel.example/management',
+            'sales': 'https://hotel.example/sales',
+            'press': 'https://hotel.example/news',
+        })
+        self.assertEqual(mock_get.call_count, 3)
+
+    @patch('hotels.services.enrichment.hotel_website.requests.get')
+    def test_social_profiles_found_and_source_tracked(self, mock_get, mock_dns):
+        mock_get.return_value = html_response('''
+          <footer>
+            <a href="https://www.linkedin.com/company/example-hotel/">LinkedIn</a>
+            <a href="https://facebook.com/examplehotel/">Facebook</a>
+            <a href="https://www.instagram.com/examplehotel/">Instagram</a>
+          </footer>
+        ''')
+        result = enrich_hotel_from_website(self.hotel)
+        self.assertEqual(result['social_profiles'], {
+            'linkedin': 'https://www.linkedin.com/company/example-hotel',
+            'facebook': 'https://facebook.com/examplehotel',
+            'instagram': 'https://www.instagram.com/examplehotel',
+        })
+        self.assertEqual(result['social_profile_sources'], {
+            'linkedin': 'https://hotel.example/',
+            'facebook': 'https://hotel.example/',
+            'instagram': 'https://hotel.example/',
+        })
+        mock_get.assert_called_once()
+
+    @patch('hotels.services.enrichment.hotel_website.requests.get')
+    def test_individual_social_profiles_are_found(self, mock_get, mock_dns):
+        cases = (
+            ('linkedin', 'https://linkedin.com/company/example', 'https://linkedin.com/company/example'),
+            ('facebook', 'https://www.facebook.com/example', 'https://www.facebook.com/example'),
+            ('instagram', 'https://instagram.com/example', 'https://instagram.com/example'),
+        )
+        for platform, url, expected in cases:
+            with self.subTest(platform=platform):
+                mock_get.reset_mock()
+                mock_get.return_value = html_response(f'<a href="{url}">Profile</a>')
+                result = enrich_hotel_from_website(self.hotel)
+                self.assertEqual(result['social_profiles'][platform], expected)
+
+    @patch('hotels.services.enrichment.hotel_website.requests.get')
+    def test_duplicate_social_links_keep_first_url(self, mock_get, mock_dns):
+        mock_get.return_value = html_response('''
+          <a href="https://linkedin.com/company/first/">LinkedIn</a>
+          <a href="https://www.linkedin.com/company/second/">LinkedIn again</a>
+        ''')
+        result = enrich_hotel_from_website(self.hotel)
+        self.assertEqual(
+            result['social_profiles']['linkedin'], 'https://linkedin.com/company/first'
+        )
+
+    @patch('hotels.services.enrichment.hotel_website.requests.get')
+    def test_invalid_fake_and_share_social_urls_are_ignored(self, mock_get, mock_dns):
+        mock_get.return_value = html_response('''
+          <a href="https://linkedin.com.example.com/company/fake">Fake</a>
+          <a href="https://linkedin.com:bad/company/malformed">Malformed</a>
+          <a href="https://www.linkedin.com/sharing/share-offsite/?url=x">Share</a>
+          <a href="https://www.facebook.com/sharer/sharer.php?u=x">Share</a>
+        ''')
+        result = enrich_hotel_from_website(self.hotel)
+        self.assertEqual(result['social_profiles'], {
+            'linkedin': None, 'facebook': None, 'instagram': None,
+        })
+        mock_get.assert_called_once()
+
+    @patch('hotels.services.enrichment.hotel_website.requests.get')
+    def test_social_url_on_contact_page_is_recorded_but_not_fetched(self, mock_get, mock_dns):
+        mock_get.side_effect = [
+            html_response('<a href="/contact">Contact</a>'),
+            html_response('<a href="https://instagram.com/examplehotel">Instagram</a>'),
+        ]
+        result = enrich_hotel_from_website(self.hotel)
+        self.assertEqual(
+            result['social_profiles']['instagram'], 'https://instagram.com/examplehotel'
+        )
+        self.assertEqual(
+            result['social_profile_sources']['instagram'], 'https://hotel.example/contact'
+        )
+        self.assertEqual(mock_get.call_count, 2)
+        requested_urls = [call.args[0] for call in mock_get.call_args_list]
+        self.assertNotIn('https://instagram.com/examplehotel', requested_urls)
+
+    @patch('hotels.services.enrichment.hotel_website.requests.get')
     def test_mailto_extraction(self, mock_get, mock_dns):
         mock_get.return_value = html_response('<a href="mailto:reservations@hotel.example">Book</a>')
         self.assertEqual(
@@ -165,6 +358,14 @@ class HotelWebsiteEnrichmentTests(SimpleTestCase):
         self.assertEqual(result['sources']['phone'], 'https://hotel.example/contact-us')
         self.assertEqual(result['sources']['email'], 'https://hotel.example/contact-us')
 
+    @patch('hotels.services.enrichment.hotel_website.requests.get')
+    def test_incoming_business_source_is_preserved(self, mock_get, mock_dns):
+        mock_get.return_value = html_response('<a href="tel:+91 1234567890">Call</a>')
+        for source in ('Browser Search', 'OpenStreetMap'):
+            with self.subTest(source=source):
+                result = enrich_hotel_from_website({**self.hotel, 'source': source})
+                self.assertEqual(result['sources']['website'], source)
+
     @patch('hotels.services.enrichment.hotel_website.requests.get', side_effect=requests.Timeout)
     def test_timeout(self, mock_get, mock_dns):
         with self.assertRaisesMessage(EnrichmentError, 'timed out'):
@@ -228,6 +429,35 @@ class HotelEnrichmentAPITests(APITestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()['status'], 'FOUND')
         mock_enrich.assert_called_once()
+
+    @patch('hotels.views.enrich_hotel_from_website')
+    def test_api_remains_backward_compatible_with_additive_fields(self, mock_enrich):
+        mock_enrich.return_value = {
+            'hotel_name': 'Hotel Arch', 'website': 'https://hotel.example/',
+            'phone': None, 'email': None, 'address': None, 'brand': None,
+            'source_urls': ['https://hotel.example/'],
+            'sources': {'website': 'OpenStreetMap', 'phone': None, 'email': None,
+                        'address': None, 'brand': None},
+            'social_profiles': {'linkedin': 'https://linkedin.com/company/hotel-arch',
+                                'facebook': None, 'instagram': None},
+            'social_profile_sources': {'linkedin': 'https://hotel.example/',
+                                       'facebook': None, 'instagram': None},
+            'discovered_pages': {'contact': None, 'about': None, 'team': None,
+                                 'leadership': None, 'management': None,
+                                 'sales': None, 'press': None},
+            'status': 'PARTIAL',
+        }
+        response = self.client.post(self.url, {
+            'name': 'Hotel Arch', 'website': 'https://hotel.example/',
+        }, format='json')
+        data = response.json()
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('hotel_name', data)
+        self.assertIn('phone', data)
+        self.assertEqual(
+            data['social_profiles']['linkedin'],
+            'https://linkedin.com/company/hotel-arch',
+        )
 
     @patch('hotels.views.enrich_hotel_from_website')
     def test_api_missing_website_response(self, mock_enrich):

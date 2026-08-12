@@ -21,6 +21,12 @@ def enrich_hotels_bulk(hotels):
         merged = {field: hotel.get(field) for field in CONTACT_FIELDS}
         sources = _existing_sources(hotel)
         fields_added = []
+        social_profiles = {'linkedin': None, 'facebook': None, 'instagram': None}
+        social_profile_sources = {'linkedin': None, 'facebook': None, 'instagram': None}
+        discovered_pages = {
+            'contact': None, 'about': None, 'team': None, 'leadership': None,
+            'management': None, 'sales': None, 'press': None,
+        }
         try:
             enriched = enrich_hotel_from_website(hotel)
             for field in CONTACT_FIELDS:
@@ -33,6 +39,9 @@ def enrich_hotels_bulk(hotels):
                 'PARTIAL' if fields_added else 'NOT_FOUND'
             )
             confidence = enriched.get('website_confidence')
+            social_profiles.update(enriched.get('social_profiles') or {})
+            social_profile_sources.update(enriched.get('social_profile_sources') or {})
+            discovered_pages.update(enriched.get('discovered_pages') or {})
         except EnrichmentError:
             logger.exception('Free website enrichment failed for %s.', hotel['name'])
             status = 'ERROR'
@@ -44,6 +53,9 @@ def enrich_hotels_bulk(hotels):
             'sources': sources,
             'fields_added': fields_added,
             'website_confidence': confidence,
+            'social_profiles': social_profiles,
+            'social_profile_sources': social_profile_sources,
+            'discovered_pages': discovered_pages,
         })
 
     return {

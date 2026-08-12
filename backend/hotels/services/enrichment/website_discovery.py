@@ -9,9 +9,13 @@ class ExistingDataWebsiteDiscoveryProvider(HotelEnrichmentProvider):
     """Discover a website only from attributable data already supplied."""
 
     def enrich(self, hotel):
+        incoming_source = hotel.get('source')
         candidates = (
-            ('website', 'OpenStreetMap', 'HIGH'),
-            ('contact_website', 'OpenStreetMap contact:website', 'HIGH'),
+            ('website', incoming_source or 'OpenStreetMap', 'HIGH'),
+            ('contact_website', (
+                f'{incoming_source} contact:website'
+                if incoming_source else 'OpenStreetMap contact:website'
+            ), 'HIGH'),
             ('brand_website', 'Verified brand website', 'MEDIUM'),
             ('domain_hint', 'Existing hotel domain hint', 'MEDIUM'),
         )
@@ -63,6 +67,7 @@ def discover_official_website(
     domain_hint=None,
     wikidata=None,
     wikipedia=None,
+    source=None,
 ):
     hotel = {
         'name': hotel_name,
@@ -76,5 +81,6 @@ def discover_official_website(
         'domain_hint': domain_hint,
         'wikidata': wikidata,
         'wikipedia': wikipedia,
+        'source': source,
     }
     return ExistingDataWebsiteDiscoveryProvider().enrich(hotel)

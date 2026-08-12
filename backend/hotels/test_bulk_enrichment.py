@@ -55,6 +55,32 @@ class BulkHotelEnrichmentAPITests(APITestCase):
         self.assertEqual(result['sources']['address'], 'OpenStreetMap')
 
     @patch('hotels.services.enrichment.bulk.enrich_hotel_from_website')
+    def test_additive_page_and_social_fields_are_preserved(self, mock_enrich):
+        mock_enrich.return_value = {
+            'social_profiles': {
+                'linkedin': 'https://linkedin.com/company/example',
+                'facebook': None, 'instagram': None,
+            },
+            'social_profile_sources': {
+                'linkedin': 'https://hotel.example/',
+                'facebook': None, 'instagram': None,
+            },
+            'discovered_pages': {'contact': 'https://hotel.example/contact'},
+        }
+        result = self._post([{'name': 'Example Hotel'}]).json()['results'][0]
+        self.assertEqual(
+            result['social_profiles']['linkedin'],
+            'https://linkedin.com/company/example',
+        )
+        self.assertEqual(
+            result['social_profile_sources']['linkedin'], 'https://hotel.example/'
+        )
+        self.assertEqual(
+            result['discovered_pages']['contact'], 'https://hotel.example/contact'
+        )
+        self.assertIn('about', result['discovered_pages'])
+
+    @patch('hotels.services.enrichment.bulk.enrich_hotel_from_website')
     def test_multiple_improvements_and_summary(self, mock_enrich):
         mock_enrich.side_effect = [
             {'phone': '+1', 'sources': {'phone': 'https://one.example/'}, 'website_confidence': 'HIGH'},

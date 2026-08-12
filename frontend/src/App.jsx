@@ -81,6 +81,7 @@ function App() {
   const [selectedCategory, setSelectedCategory] = useState('hotels_resorts')
   const [categoryLoadError, setCategoryLoadError] = useState('')
   const providerLabels = { openstreetmap: 'OpenStreetMap', geoapify: 'Geoapify', google: 'Google Places', playwright: 'Browser Search' }
+  const peopleProviderLabels = { official_website: 'Official Website', apollo: 'Apollo', zoominfo: 'ZoomInfo' }
   const availableProviders = (providerSettings?.business_providers || []).map((id) => ({ id, name: providerLabels[id] }))
   const providerNames = (searchedProviders.length ? searchedProviders : selectedProviders)
     .map((provider) => providerLabels[provider])
@@ -337,7 +338,7 @@ function App() {
             onChange={() => setSelectedPeopleProviders(selectedPeopleProviders.includes(provider)
               ? selectedPeopleProviders.filter((item) => item !== provider)
               : [...selectedPeopleProviders, provider])} />
-          {provider === 'zoominfo' ? 'ZoomInfo' : 'Apollo'}
+          {peopleProviderLabels[provider] || provider}
         </label>)}
         {!providerSettings?.people_providers?.length && <span>Configure a people enrichment provider in Settings.</span>}
       </fieldset>

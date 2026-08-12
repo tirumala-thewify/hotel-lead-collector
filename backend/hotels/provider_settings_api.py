@@ -35,7 +35,7 @@ class ProviderSettingsUpdateSerializer(serializers.Serializer):
         required=False, allow_blank=True, trim_whitespace=False, write_only=True
     )
     people_providers = serializers.ListField(
-        child=serializers.ChoiceField(choices=('apollo', 'zoominfo')),
+        child=serializers.ChoiceField(choices=('official_website', 'apollo', 'zoominfo')),
         allow_empty=True, required=False,
     )
     zoominfo_api_key = serializers.CharField(
