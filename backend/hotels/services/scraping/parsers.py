@@ -72,11 +72,28 @@ def normalize_listing(raw, category):
     }
 
 
+def listing_identity(listing):
+    place_id = (
+        listing.get('place_id') or listing.get('id')
+        or place_identifier(listing.get('maps_url') or listing.get('google_maps_url'))
+    )
+    if place_id:
+        return ('place_id', str(place_id))
+    maps_url = listing.get('maps_url') or listing.get('google_maps_url')
+    if maps_url:
+        return ('maps_url', str(maps_url).split('#', 1)[0])
+    name = ' '.join(str(listing.get('name') or '').casefold().split())
+    address = ' '.join(str(listing.get('address') or '').casefold().split())
+    if address:
+        return ('name_address', name, address)
+    latitude, longitude = listing.get('latitude'), listing.get('longitude')
+    return ('name_coordinates', name, latitude, longitude)
+
+
 def deduplicate_listings(listings):
     unique, keys = [], set()
     for listing in listings:
-        url_key = place_identifier(listing.get('maps_url')) or listing.get('maps_url')
-        key = ('url', url_key) if url_key else ('text', str(listing.get('name') or '').casefold().strip(), str(listing.get('address') or '').casefold().strip())
+        key = listing_identity(listing)
         if key not in keys:
             keys.add(key)
             unique.append(listing)

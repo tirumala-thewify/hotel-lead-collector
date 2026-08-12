@@ -7,38 +7,58 @@ from hotels.models import ProviderSettings
 from hotels.services.providers.factory import get_business_provider
 from hotels.services.providers.orchestrator import search_businesses_multi_provider
 from hotels.services.providers.playwright_provider import (
-    PlaywrightProvider, PlaywrightProviderError,
+    CATEGORY_SEARCH_TERMS, PlaywrightProvider, PlaywrightProviderError,
 )
 from hotels.services.scraping.browser import BrowserStartupError, browser_page
 from hotels.services.scraping.maps_scraper import (
     DETAIL_SELECTORS, MapsScraper, ScraperError,
 )
 from hotels.services.scraping.parsers import (
-    deduplicate_listings, normalize_listing, place_identifier,
+    deduplicate_listings, listing_identity, normalize_listing, place_identifier,
 )
 
 
-@override_settings(PLAYWRIGHT_MAX_RESULTS=20)
+@override_settings(
+    PLAYWRIGHT_MAX_RESULTS=20, PLAYWRIGHT_MAX_RESULTS_PER_QUERY=20,
+    PLAYWRIGHT_MAX_TOTAL_RESULTS=40,
+)
 class PlaywrightProviderTests(SimpleTestCase):
     def test_success_forwards_category_and_coordinates(self):
         scraper = Mock()
-        scraper.search.return_value = [{
+        scraper.search_many.return_value = [{
             'name': 'River Hotel', 'latitude': 16.5062, 'longitude': 80.648,
         }]
         results = PlaywrightProvider(scraper).search_nearby_businesses(
             16.5062, 80.648, 5000, 'hotels_resorts'
         )
         self.assertEqual(results[0]['name'], 'River Hotel')
-        call = scraper.search.call_args.kwargs
-        self.assertEqual(call['query'], 'hotels')
+        call = scraper.search_many.call_args.kwargs
+        self.assertEqual(call['queries'], ('hotels', 'resorts'))
         self.assertEqual((call['latitude'], call['longitude']), (16.5062, 80.648))
 
-    def test_uses_maps_search_term_for_each_supported_category(self):
+    def test_combined_categories_use_concise_terms(self):
+        expected = {
+            'hotels_resorts': ('hotels', 'resorts'),
+            'cafes': ('cafes', 'coffee shops'),
+            'salons_spas': ('salons', 'spas'),
+            'gyms_fitness': ('gyms', 'fitness centers'),
+        }
+        for category, terms in expected.items():
+            with self.subTest(category=category):
+                scraper = Mock()
+                scraper.search_many.return_value = []
+                PlaywrightProvider(scraper).search_nearby_businesses(1, 2, 1000, category)
+                self.assertEqual(scraper.search_many.call_args.kwargs['queries'], terms)
+
+    def test_single_term_category_runs_once(self):
         scraper = Mock()
-        scraper.search.return_value = []
-        provider = PlaywrightProvider(scraper)
-        provider.search_nearby_businesses(1, 2, 1000, 'salons_spas')
-        self.assertEqual(scraper.search.call_args.kwargs['query'], 'salons and spas')
+        scraper.search_many.return_value = []
+        PlaywrightProvider(scraper).search_nearby_businesses(1, 2, 1000, 'restaurants')
+        self.assertEqual(scraper.search_many.call_args.kwargs['queries'], ('restaurants',))
+
+    def test_mapping_covers_existing_categories(self):
+        from hotels.business_categories import BUSINESS_CATEGORIES
+        self.assertEqual(set(CATEGORY_SEARCH_TERMS), set(BUSINESS_CATEGORIES))
 
     def test_unknown_category_remains_rejected(self):
         with self.assertRaises(ValueError):
@@ -46,12 +66,12 @@ class PlaywrightProviderTests(SimpleTestCase):
 
     def test_empty_results(self):
         scraper = Mock()
-        scraper.search.return_value = []
+        scraper.search_many.return_value = []
         self.assertEqual(PlaywrightProvider(scraper).search_nearby_hotels(1, 2, 1000), [])
 
     def test_scraper_failure_becomes_controlled_provider_error(self):
         scraper = Mock()
-        scraper.search.side_effect = ScraperError('private browser detail')
+        scraper.search_many.side_effect = ScraperError('private browser detail')
         with self.assertRaisesMessage(PlaywrightProviderError, 'Browser business search failed'):
             PlaywrightProvider(scraper).search_nearby_hotels(1, 2, 1000)
 
@@ -128,8 +148,77 @@ class ParserTests(SimpleTestCase):
         no_url = {'name': 'Two', 'address': 'Lane', 'maps_url': None}
         self.assertEqual(len(deduplicate_listings([first, same_url, no_url, dict(no_url)])), 2)
 
+    def test_identity_prefers_place_id_then_name_address_and_coordinates(self):
+        self.assertEqual(listing_identity({'place_id': 'abc', 'maps_url': 'other'}), ('place_id', 'abc'))
+        self.assertEqual(
+            listing_identity({'name': ' Hotel One ', 'address': ' Main Road '}),
+            ('name_address', 'hotel one', 'main road'),
+        )
+        self.assertEqual(
+            listing_identity({'name': 'Hotel One', 'latitude': 1, 'longitude': 2}),
+            ('name_coordinates', 'hotel one', 1, 2),
+        )
+
 
 class MapsScraperFailureTests(SimpleTestCase):
+    def test_multi_query_deduplicates_before_detail_extraction_and_caps_results(self):
+        scraper = MapsScraper()
+        scraper._search_cards = Mock(side_effect=[
+            [
+                {'name': 'Same Hotel', 'maps_url': 'https://maps.test/?query_place_id=same'},
+                {'name': 'Hotel Two', 'address': 'Road Two'},
+            ],
+            [
+                {'name': 'Same Changed', 'maps_url': 'https://maps.test/?query_place_id=same'},
+                {'name': 'Hotel Two', 'address': 'Road Two'},
+                {'name': 'Hotel Three', 'address': 'Road Three'},
+            ],
+        ])
+        scraper._extract_raw_results = Mock(side_effect=lambda _page, raw, _category: raw)
+        @contextmanager
+        def page(**kwargs):
+            yield Mock()
+        scraper.page_factory = page
+        result = scraper.search_many(
+            queries=('hotels', 'resorts'), latitude=1, longitude=2,
+            category='hotels_resorts', max_results_per_query=2, max_total_results=2,
+        )
+        self.assertEqual(len(result), 2)
+        raw = scraper._extract_raw_results.call_args.args[1]
+        self.assertEqual(len(raw), 2)
+        self.assertEqual(scraper._search_cards.call_args_list[0].args[-1], 2)
+
+    def test_multi_query_partial_failure_preserves_success(self):
+        scraper = MapsScraper()
+        scraper._search_cards = Mock(side_effect=[
+            [{'name': 'Hotel One', 'address': 'Road'}], RuntimeError('timeout'),
+        ])
+        scraper._extract_raw_results = Mock(side_effect=lambda _page, raw, _category: raw)
+        @contextmanager
+        def page(**kwargs):
+            yield Mock()
+        scraper.page_factory = page
+        result = scraper.search_many(
+            queries=('hotels', 'resorts'), latitude=1, longitude=2,
+            category='hotels_resorts', max_results_per_query=20, max_total_results=40,
+        )
+        self.assertEqual([item['name'] for item in result], ['Hotel One'])
+        self.assertEqual(scraper.last_query_results['hotels']['status'], 'success')
+        self.assertEqual(scraper.last_query_results['hotels']['unique_added'], 1)
+        self.assertEqual(scraper.last_query_results['resorts']['status'], 'error')
+
+    def test_duplicate_card_opens_details_once(self):
+        scraper = MapsScraper()
+        raw = [
+            {'name': 'One', 'maps_url': 'https://maps.test/?query_place_id=abc'},
+            {'name': 'Again', 'maps_url': 'https://maps.test/?query_place_id=abc'},
+        ]
+        unique = scraper._deduplicate_raw_listings(raw)
+        scraper.open_listing = Mock()
+        scraper.extract_listing_details = Mock(return_value={})
+        scraper._extract_raw_results(Mock(), unique, 'hotels_resorts')
+        scraper.open_listing.assert_called_once()
+
     def test_detail_selectors_extract_all_available_fields(self):
         scraper, page = MapsScraper(), Mock()
         values = {
@@ -204,7 +293,7 @@ class MapsScraperFailureTests(SimpleTestCase):
         scraper = MapsScraper()
         bad, good, cards = Mock(), Mock(), Mock()
         cards.count.return_value = 2
-        cards.nth.side_effect = [bad, bad, good, good]
+        cards.nth.side_effect = [bad, good]
         bad.locator.side_effect = RuntimeError('DOM changed')
         link = Mock()
         link.first = link
@@ -224,7 +313,7 @@ class MapsScraperFailureTests(SimpleTestCase):
         first.locator.return_value, second.locator.return_value = first_link, second_link
         first.inner_text.return_value = second.inner_text.return_value = ''
         cards.count.return_value = 2
-        cards.nth.side_effect = [first, first, second, second]
+        cards.nth.side_effect = [first, second]
         page = Mock()
         page.locator.return_value = cards
         scraper._attribute = Mock(return_value=None)
@@ -237,6 +326,20 @@ class MapsScraperFailureTests(SimpleTestCase):
         self.assertEqual([result['name'] for result in results], ['First Hotel', 'Second Hotel'])
         self.assertIsNone(results[0]['address'])
         self.assertEqual(results[1]['address'], 'Second Road')
+
+    @override_settings(
+        PLAYWRIGHT_MAX_RESULTS_PER_QUERY=20, PLAYWRIGHT_MAX_TOTAL_RESULTS=40,
+    )
+    def test_provider_excludes_business_outside_radius(self):
+        scraper = Mock()
+        scraper.search_many.return_value = [
+            {'name': 'Near', 'latitude': 1, 'longitude': 2},
+            {'name': 'Far', 'latitude': 20, 'longitude': 20},
+        ]
+        results = PlaywrightProvider(scraper).search_nearby_businesses(
+            1, 2, 5000, 'hotels_resorts'
+        )
+        self.assertEqual([item['name'] for item in results], ['Near'])
 
 
 class BrowserCleanupTests(SimpleTestCase):

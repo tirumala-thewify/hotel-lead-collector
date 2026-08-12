@@ -11,24 +11,28 @@ class PlaywrightProviderError(Exception):
     """Raised when browser-backed business discovery fails safely."""
 
 
+CATEGORY_SEARCH_TERMS = {
+    'hotels_resorts': ('hotels', 'resorts'),
+    'cafes': ('cafes', 'coffee shops'),
+    'restaurants': ('restaurants',),
+    'shopping_malls': ('shopping malls',),
+    'hospitals': ('hospitals',),
+    'coworking_spaces': ('coworking spaces',),
+    'salons_spas': ('salons', 'spas'),
+    'gyms_fitness': ('gyms', 'fitness centers'),
+    'universities_colleges': ('universities', 'colleges'),
+    'schools': ('schools',),
+    'airports': ('airports',),
+    'retail': ('retail stores', 'shopping stores'),
+    'event_venues': ('event venues', 'banquet halls'),
+    'banks': ('banks',),
+    'petrol_stations': ('petrol stations', 'gas stations'),
+    'pharmacies': ('pharmacies',),
+    'hostels': ('hostels',),
+}
+# Backward-compatible primary-term view for integrations importing the old constant.
 MAPS_CATEGORY_QUERIES = {
-    'hotels_resorts': 'hotels',
-    'cafes': 'cafes',
-    'restaurants': 'restaurants',
-    'shopping_malls': 'shopping malls',
-    'hospitals': 'hospitals',
-    'coworking_spaces': 'coworking spaces',
-    'salons_spas': 'salons and spas',
-    'gyms_fitness': 'gyms and fitness centers',
-    'universities_colleges': 'universities and colleges',
-    'schools': 'schools',
-    'airports': 'airports',
-    'retail': 'retail stores',
-    'event_venues': 'event venues',
-    'banks': 'banks',
-    'petrol_stations': 'petrol stations',
-    'pharmacies': 'pharmacies',
-    'hostels': 'hostels',
+    category: terms[0] for category, terms in CATEGORY_SEARCH_TERMS.items()
 }
 
 
@@ -41,9 +45,13 @@ class PlaywrightProvider(HotelProvider):
 
     def search_nearby_businesses(self, latitude, longitude, radius, category='hotels_resorts'):
         get_business_category(category)
-        query = MAPS_CATEGORY_QUERIES[category]
+        queries = CATEGORY_SEARCH_TERMS[category]
         try:
-            results = self.scraper.search(query=query, latitude=latitude, longitude=longitude, category=category, max_results=settings.PLAYWRIGHT_MAX_RESULTS)
+            results = self.scraper.search_many(
+                queries=queries, latitude=latitude, longitude=longitude, category=category,
+                max_results_per_query=settings.PLAYWRIGHT_MAX_RESULTS_PER_QUERY,
+                max_total_results=settings.PLAYWRIGHT_MAX_TOTAL_RESULTS,
+            )
         except (ScraperError, ValueError, TypeError) as exc:
             raise PlaywrightProviderError('Browser business search failed.') from exc
         for result in results:
