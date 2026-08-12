@@ -35,6 +35,7 @@ def export_columns():
             columns.append((f'{label} {field}', f'{label}:{field.lower()}'))
     for field in ('Address', 'Phone', 'Email', 'Website', 'Brand'):
         columns.append((f'{field} Source', f'source:{field.lower()}'))
+    columns.append(('Rating', 'rating'))
     return columns
 
 
@@ -176,40 +177,44 @@ def build_hotel_workbook(hotels, context):
     social_rows = []
     for hotel in hotels:
         for item in hotel.get('business_emails') or []:
-            business_rows.append((hotel.get('name'), 'Email', item.get('email'),
-                                  item.get('type'), item.get('source_url')))
+            business_rows.append((hotel.get('name'), item.get('type'),
+                                  item.get('email'), None, item.get('source_url')))
         for item in hotel.get('business_phones') or []:
-            business_rows.append((hotel.get('name'), 'Phone', item.get('phone'),
-                                  item.get('type'), item.get('source_url')))
+            business_rows.append((hotel.get('name'), item.get('type'), None,
+                                  item.get('phone'), item.get('source_url')))
         for contact in hotel.get('decision_makers') or []:
             people_rows.append((
                 hotel.get('name'), contact.get('name'), contact.get('title'),
-                contact.get('department'), contact.get('role_group'),
+                contact.get('role_group'),
                 contact.get('business_email') or contact.get('email'),
-                contact.get('phone'), contact.get('source_url'),
+                contact.get('phone'), contact.get('source'), contact.get('source_url'),
                 contact.get('confidence'),
             ))
         profiles = hotel.get('social_profiles') or {}
         profile_sources = hotel.get('social_profile_sources') or {}
-        for platform in ('linkedin', 'facebook', 'instagram'):
-            if profiles.get(platform):
-                social_rows.append((hotel.get('name'), platform.title(),
-                                    profiles[platform], profile_sources.get(platform)))
+        source_urls = list(dict.fromkeys(
+            profile_sources.get(platform) for platform in ('linkedin', 'facebook', 'instagram')
+            if profile_sources.get(platform)
+        ))
+        social_rows.append((
+            hotel.get('name'), profiles.get('linkedin'), profiles.get('facebook'),
+            profiles.get('instagram'), '; '.join(source_urls),
+        ))
     _add_structured_sheet(
         workbook, 'Business Contacts',
-        ['Hotel Name', 'Contact Kind', 'Value', 'Type', 'Source URL'],
+        ['Business Name', 'Contact Type', 'Email', 'Phone', 'Source URL'],
         business_rows, link_columns=(5,),
     )
     _add_structured_sheet(
         workbook, 'Decision Makers',
-        ['Hotel Name', 'Name', 'Title', 'Department', 'Role Group', 'Email',
-         'Phone', 'Source URL', 'Confidence'],
+        ['Business Name', 'Person Name', 'Title', 'Role Group', 'Email',
+         'Phone', 'Source', 'Source URL', 'Confidence'],
         people_rows, link_columns=(8,),
     )
     _add_structured_sheet(
         workbook, 'Social Profiles',
-        ['Hotel Name', 'Platform', 'Profile URL', 'Source URL'],
-        social_rows, link_columns=(3, 4),
+        ['Business Name', 'LinkedIn', 'Facebook', 'Instagram', 'Source URL'],
+        social_rows, link_columns=(2, 3, 4, 5),
     )
 
     output = BytesIO()

@@ -3,8 +3,10 @@ import re
 from django.http import HttpResponse
 from rest_framework import serializers
 from rest_framework.decorators import api_view
+from rest_framework.response import Response
 
 from .services.export import build_hotel_workbook
+from .services.export.enrichment import prepare_hotels_for_export
 
 
 MAX_EXPORT_ROWS = 1000
@@ -38,6 +40,8 @@ class BusinessPhoneSerializer(serializers.Serializer):
 
 
 class ExportHotelSerializer(serializers.Serializer):
+    id = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    place_id = serializers.CharField(required=False, allow_blank=True, allow_null=True)
     name = serializers.CharField(required=False, allow_blank=True, allow_null=True)
     distance_km = serializers.FloatField(required=False, allow_null=True)
     address = serializers.CharField(required=False, allow_blank=True, allow_null=True)
@@ -46,6 +50,8 @@ class ExportHotelSerializer(serializers.Serializer):
     website = serializers.CharField(required=False, allow_blank=True, allow_null=True)
     brand = serializers.CharField(required=False, allow_blank=True, allow_null=True)
     stars = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    rating = serializers.FloatField(required=False, allow_null=True)
+    review_count = serializers.IntegerField(required=False, allow_null=True)
     latitude = serializers.FloatField(required=False, allow_null=True)
     longitude = serializers.FloatField(required=False, allow_null=True)
     source = serializers.CharField(required=False, allow_blank=True, allow_null=True)
@@ -57,6 +63,11 @@ class ExportHotelSerializer(serializers.Serializer):
     business_phones = BusinessPhoneSerializer(many=True, required=False)
     social_profiles = serializers.DictField(required=False)
     social_profile_sources = serializers.DictField(required=False)
+    discovered_pages = serializers.DictField(required=False)
+    website_confidence = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    category = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    maps_url = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    google_maps_url = serializers.CharField(required=False, allow_blank=True, allow_null=True)
 
 
 class SearchContextSerializer(serializers.Serializer):
@@ -74,6 +85,12 @@ class ExcelExportSerializer(serializers.Serializer):
         max_length=MAX_EXPORT_ROWS,
     )
     context = SearchContextSerializer(required=True)
+
+
+class ExportPreparationSerializer(serializers.Serializer):
+    hotels = serializers.ListField(
+        child=ExportHotelSerializer(), allow_empty=False, max_length=MAX_EXPORT_ROWS,
+    )
 
 
 def _slug(value):
@@ -96,3 +113,10 @@ def export_excel(request):
     )
     response['Content-Disposition'] = f'attachment; filename="{filename}"'
     return response
+
+
+@api_view(['POST'])
+def prepare_export(request):
+    serializer = ExportPreparationSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+    return Response({'hotels': prepare_hotels_for_export(serializer.validated_data['hotels'])})

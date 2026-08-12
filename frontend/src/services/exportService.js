@@ -10,6 +10,7 @@ const BASE_COLUMNS = [
   ['Website', (hotel) => hotel.website],
   ['Brand', (hotel) => hotel.brand],
   ['Stars', (hotel) => hotel.stars],
+  ['Rating', (hotel) => hotel.rating],
   ['Latitude', (hotel) => hotel.latitude],
   ['Longitude', (hotel) => hotel.longitude],
   ['Source', (hotel) => hotel.source],
@@ -28,8 +29,10 @@ function manager(hotel, department) {
 
 const COLUMNS = [...BASE_COLUMNS]
 const joinValues = (items, value) => (items || []).map(value).filter(Boolean).join('; ')
-const roleContacts = (hotel, groups) => (hotel.decision_makers || []).filter((item) => groups.includes(item.role_group))
-const roleValue = (hotel, groups, field) => joinValues(roleContacts(hotel, groups), (item) => item[field] || (field === 'email' ? item.business_email : null))
+const roleContacts = (hotel, groups, titles) => (hotel.decision_makers || []).filter((item) => (
+  groups.includes(item.role_group) && (!titles || titles.includes(item.title))
+))
+const roleValue = (hotel, groups, field, titles) => joinValues(roleContacts(hotel, groups, titles), (item) => item[field] || (field === 'email' ? item.business_email : null))
 COLUMNS.push(
   ['All Business Emails', (hotel) => joinValues(hotel.business_emails, (item) => `${item.email} [${item.type || 'other'}]`)],
   ['Business Email Source URLs', (hotel) => joinValues(hotel.business_emails, (item) => item.source_url)],
@@ -43,18 +46,21 @@ COLUMNS.push(
   ['Instagram Source URL', (hotel) => hotel.social_profile_sources?.instagram],
   ['Decision Makers', (hotel) => joinValues(hotel.decision_makers, (item) => `${item.name || 'Team'} — ${item.title}`)],
   ['Decision Maker Source URLs', (hotel) => joinValues(hotel.decision_makers, (item) => item.source_url)],
+  ['Decision Maker Confidence', (hotel) => joinValues(hotel.decision_makers, (item) => item.confidence)],
 )
-for (const [label, groups] of [
+for (const [label, groups, titles] of [
   ['General Manager', ['general_manager']],
-  ['IT Director / Head of IT', ['it_leadership', 'it_management']],
-  ['CIO / CTO', ['executive']],
+  ['IT Director / Head of IT', ['it_leadership']],
+  ['IT Manager / Infrastructure Manager', ['it_management']],
+  ['CIO', ['executive'], ['CIO', 'Chief Information Officer']],
+  ['CTO', ['executive'], ['CTO', 'Chief Technology Officer']],
   ['Director of Operations', ['operations']],
   ['Sales Contact', ['sales']],
 ]) {
   COLUMNS.push(
-    [label, (hotel) => roleValue(hotel, groups, 'name')],
-    [`${label} Email`, (hotel) => roleValue(hotel, groups, 'email')],
-    [`${label} Phone`, (hotel) => roleValue(hotel, groups, 'phone')],
+    [label, (hotel) => roleValue(hotel, groups, 'name', titles)],
+    [`${label} Email`, (hotel) => roleValue(hotel, groups, 'email', titles)],
+    [`${label} Phone`, (hotel) => roleValue(hotel, groups, 'phone', titles)],
   )
 }
 for (const [label, department] of MANAGER_GROUPS) {

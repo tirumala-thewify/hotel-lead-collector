@@ -4,6 +4,7 @@ const ENRICH_HOTEL_URL = 'http://127.0.0.1:8000/api/hotels/enrich/'
 const BULK_ENRICH_HOTELS_URL = 'http://127.0.0.1:8000/api/hotels/enrich/bulk/'
 const ENRICH_MANAGERS_URL = 'http://127.0.0.1:8000/api/hotels/enrich-managers/'
 const BULK_ENRICH_MANAGERS_URL = 'http://127.0.0.1:8000/api/hotels/enrich-managers/bulk/'
+const PREPARE_EXPORT_URL = 'http://127.0.0.1:8000/api/hotels/export/prepare/'
 
 export class HotelServiceError extends Error {
   constructor(message, status = null) {
@@ -131,6 +132,29 @@ export async function freeEnrichHotelsBulk(hotels) {
     throw new HotelServiceError(data?.message || 'Unable to free enrich these hotels.', response.status)
   }
   return data
+}
+
+export async function prepareExportHotels(hotels) {
+  let response
+  try {
+    response = await fetch(PREPARE_EXPORT_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ hotels }),
+    })
+  } catch {
+    throw new HotelServiceError('Cannot connect to the export enrichment API.')
+  }
+  let data
+  try {
+    data = JSON.parse(await response.text())
+  } catch {
+    throw new HotelServiceError('The export enrichment API returned an invalid response.', response.status)
+  }
+  if (!response.ok || !Array.isArray(data?.hotels)) {
+    throw new HotelServiceError(data?.message || 'Unable to prepare enriched export.', response.status)
+  }
+  return data.hotels
 }
 
 export async function findDecisionMakers(business, providers) {

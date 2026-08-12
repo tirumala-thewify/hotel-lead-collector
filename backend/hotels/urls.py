@@ -4,7 +4,7 @@ from .views import (
     enrich_hotel, enrich_hotels_bulk_api, enrich_managers,
     business_categories, enrich_managers_bulk_api, health, nearby_hotels,
 )
-from .export_api import export_excel
+from .export_api import export_excel, prepare_export
 
 
 urlpatterns = [
@@ -16,4 +16,5 @@ urlpatterns = [
     path('enrich-managers/', enrich_managers, name='enrich-managers'),
     path('enrich-managers/bulk/', enrich_managers_bulk_api, name='enrich-managers-bulk'),
     path('export/excel/', export_excel, name='export-excel'),
+    path('export/prepare/', prepare_export, name='prepare-export'),
 ]

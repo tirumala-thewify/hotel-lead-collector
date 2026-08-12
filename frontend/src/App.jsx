@@ -339,6 +339,12 @@ function App() {
     }
   }
 
+  const handleExportEnriched = (enrichedHotels) => {
+    setHotels((current) => current.map((hotel, index) => (
+      enrichedHotels[index] ? { ...hotel, ...enrichedHotels[index] } : hotel
+    )))
+  }
+
   return (
     <main className="app-shell">
       <AppHeader providerName={providerNames.join(' + ')} />
@@ -398,7 +404,7 @@ function App() {
               onRun={handleBulkManagers}
             />
             {selectedCategory !== 'hotels_resorts' && <span className="action-note enrichment-limitation">Business contact enrichment for this category will be added in a later phase.</span>}
-            <ExportButtons hotels={hotels} context={{ location: selectedLocationName, latitude: Number(searchValues.lat), longitude: Number(searchValues.lng), radius: Number(searchValues.radius), provider: providerNames.join(' + ') }} />
+            <ExportButtons hotels={hotels} onEnriched={handleExportEnriched} context={{ location: selectedLocationName, latitude: Number(searchValues.lat), longitude: Number(searchValues.lng), radius: Number(searchValues.radius), provider: providerNames.join(' + ') }} />
             </ResultsToolbar>
             <HotelTable
               hotels={hotels}

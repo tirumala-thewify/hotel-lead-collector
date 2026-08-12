@@ -79,7 +79,10 @@ class ExcelWorkbookTests(SimpleTestCase):
         self.assertIn('Social Profiles', workbook.sheetnames)
         self.assertEqual(workbook['Business Contacts'].max_row, 3)
         self.assertEqual(workbook['Decision Makers'].cell(2, 2).value, 'Jane Doe')
-        self.assertEqual(workbook['Social Profiles'].cell(2, 2).value, 'Linkedin')
+        self.assertEqual(
+            workbook['Social Profiles'].cell(2, 2).value,
+            'https://linkedin.com/company/hotel',
+        )
 
     def test_headers_are_correct(self):
         sheet = self.workbook()['Hotels']
@@ -169,3 +172,93 @@ class ExcelExportAPITests(APITestCase):
         self.assertEqual(response.status_code, 200)
         mock_get.assert_not_called()
         mock_post.assert_not_called()
+
+
+class ExportPreparationAPITests(APITestCase):
+    url = '/api/hotels/export/prepare/'
+
+    @patch('hotels.services.export.enrichment.enrich_hotels_bulk')
+    def test_website_business_is_automatically_enriched_with_official_data(self, enrich):
+        enrich.return_value = {'results': [{
+            'hotel_name': 'Hotel', 'status': 'FOUND',
+            'hotel': {'website': 'https://hotel.example', 'email': 'info@hotel.example'},
+            'sources': {'email': 'https://hotel.example/contact'},
+            'business_emails': [{'email': 'info@hotel.example', 'type': 'general',
+                                 'source_url': 'https://hotel.example/contact'}],
+            'business_phones': [{'phone': '+1 212 555 0100', 'type': 'general'}],
+            'social_profiles': {'linkedin': 'https://linkedin.com/company/hotel'},
+            'social_profile_sources': {'linkedin': 'https://hotel.example'},
+            'decision_makers': [
+                {'name': 'Jane Doe', 'title': 'IT Director',
+                 'role_group': 'it_leadership', 'source': 'Official Website'},
+            ],
+        }]}
+        response = self.client.post(self.url, {'hotels': [
+            {'name': 'Hotel', 'website': 'https://hotel.example'},
+        ]}, format='json')
+        self.assertEqual(response.status_code, 200)
+        hotel = response.json()['hotels'][0]
+        self.assertEqual(hotel['business_emails'][0]['email'], 'info@hotel.example')
+        self.assertEqual(hotel['decision_makers'][0]['title'], 'IT Director')
+        enrich.assert_called_once()
+
+    @patch('hotels.services.export.enrichment.enrich_hotels_bulk')
+    def test_no_website_and_existing_enrichment_are_not_fetched(self, enrich):
+        ready = {
+            'name': 'Ready', 'website': 'https://ready.example',
+            'enrichment_status': 'NOT_FOUND', 'business_emails': [],
+            'business_phones': [], 'social_profiles': {}, 'decision_makers': [],
+        }
+        response = self.client.post(self.url, {'hotels': [
+            {'name': 'No Website', 'address': 'Delhi'}, ready,
+        ]}, format='json')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.json()['hotels']), 2)
+        enrich.assert_not_called()
+
+    @patch('hotels.services.export.enrichment.enrich_hotels_bulk')
+    def test_more_than_ten_are_processed_in_bounded_batches(self, enrich):
+        def response_for(batch):
+            return {'results': [{
+                'hotel_name': hotel['name'], 'status': 'NOT_FOUND',
+                'hotel': hotel, 'sources': {},
+            } for hotel in batch]}
+        enrich.side_effect = response_for
+        hotels = [
+            {'name': f'Hotel {index}', 'website': f'https://hotel-{index}.example'}
+            for index in range(23)
+        ]
+        response = self.client.post(self.url, {'hotels': hotels}, format='json')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual([len(call.args[0]) for call in enrich.call_args_list], [10, 10, 3])
+
+    @patch('hotels.services.export.enrichment.enrich_hotels_bulk')
+    def test_individual_failure_is_preserved_and_does_not_fail_export(self, enrich):
+        enrich.return_value = {'results': [
+            {'hotel_name': 'Bad', 'status': 'ERROR', 'hotel': {'website': 'https://bad.example'}},
+            {'hotel_name': 'Good', 'status': 'FOUND', 'hotel': {
+                'website': 'https://good.example', 'email': 'info@good.example'},
+             'business_emails': [{'email': 'info@good.example'}]},
+        ]}
+        response = self.client.post(self.url, {'hotels': [
+            {'name': 'Bad', 'website': 'https://bad.example', 'address': 'Original'},
+            {'name': 'Good', 'website': 'https://good.example'},
+        ]}, format='json')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['hotels'][0]['address'], 'Original')
+        self.assertEqual(response.json()['hotels'][1]['email'], 'info@good.example')
+
+    @patch('hotels.services.people_enrichment.apollo.search_decision_makers')
+    @patch('hotels.services.people_enrichment.zoominfo.ZoomInfoPeopleEnrichmentProvider.search_decision_makers')
+    @patch('hotels.services.export.enrichment.enrich_hotels_bulk')
+    def test_paid_people_providers_are_never_called(self, enrich, zoominfo, apollo):
+        enrich.return_value = {'results': [{
+            'hotel_name': 'Hotel', 'status': 'NOT_FOUND',
+            'hotel': {'website': 'https://hotel.example'},
+        }]}
+        response = self.client.post(self.url, {'hotels': [
+            {'name': 'Hotel', 'website': 'https://hotel.example'},
+        ]}, format='json')
+        self.assertEqual(response.status_code, 200)
+        apollo.assert_not_called()
+        zoominfo.assert_not_called()
