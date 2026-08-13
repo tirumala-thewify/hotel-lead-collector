@@ -30,6 +30,7 @@ function HotelDetailsDrawer({ hotel, categoryName, onClose, onEnrich, onFindMana
   const decisionMakers = hotel.decision_makers || hotel.manager_contacts || []
   const businessEmails = hotel.business_emails || []
   const businessPhones = hotel.business_phones || []
+  const whatsappContacts = hotel.whatsapp_contacts || []
   const socialProfiles = hotel.social_profiles || {}
   const socialSources = hotel.social_profile_sources || {}
   const decisionMakerAvailable = apolloEnabled && apolloConfigured
@@ -59,6 +60,14 @@ function HotelDetailsDrawer({ hotel, categoryName, onClose, onEnrich, onFindMana
           {businessEmails.length === 0 && businessPhones.length === 0 && <p className="muted-copy">Not available from the official website</p>}
           {businessEmails.map((contact) => <p key={`${contact.email}-${contact.source_url}`}><a href={`mailto:${contact.email}`}>{contact.email}</a> <small>{contact.type || 'other'} · Source: <a href={contact.source_url} target="_blank" rel="noopener noreferrer">official page</a></small></p>)}
           {businessPhones.map((contact) => <p key={`${contact.normalized}-${contact.source_url}`}>{contact.phone} <small>{contact.type || 'general'} · Source: <a href={contact.source_url} target="_blank" rel="noopener noreferrer">official page</a></small></p>)}
+        </section>
+
+        <section><h3>WhatsApp</h3>
+          {whatsappContacts.length ? whatsappContacts.map((contact) => <dl className="detail-list" key={contact.normalized}>
+            <div><dt>WhatsApp</dt><dd>{contact.number}</dd></div>
+            <div><dt>Status</dt><dd>Confirmed from public website</dd></div>
+            <div className="wide-detail"><dt>Source</dt><dd><a href={contact.source_url} target="_blank" rel="noopener noreferrer">{contact.source_url}</a></dd></div>
+          </dl>) : <p className="muted-copy">Not confirmed from the official website</p>}
         </section>
 
         {Object.values(socialProfiles).some(Boolean) && <section><h3>Social Profiles</h3><dl className="detail-list">

@@ -29,6 +29,7 @@ def enrich_hotels_bulk(hotels):
         }
         business_emails = []
         business_phones = []
+        whatsapp_contacts = []
         decision_makers = []
         try:
             enriched = enrich_hotel_from_website(hotel)
@@ -47,6 +48,7 @@ def enrich_hotels_bulk(hotels):
             discovered_pages.update(enriched.get('discovered_pages') or {})
             business_emails = enriched.get('business_emails') or []
             business_phones = enriched.get('business_phones') or []
+            whatsapp_contacts = enriched.get('whatsapp_contacts') or []
             decision_makers = enriched.get('decision_makers') or []
         except EnrichmentError:
             logger.exception('Free website enrichment failed for %s.', hotel['name'])
@@ -64,6 +66,7 @@ def enrich_hotels_bulk(hotels):
             'discovered_pages': discovered_pages,
             'business_emails': business_emails,
             'business_phones': business_phones,
+            'whatsapp_contacts': whatsapp_contacts,
             'decision_makers': decision_makers,
         })
 

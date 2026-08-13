@@ -9,6 +9,7 @@ const resultFor = (hotel) => ({
   hotel: { website: hotel.website, email: `info@${hotel.name}.example` },
   business_emails: [{ email: `info@${hotel.name}.example`, type: 'general' }],
   business_phones: [{ phone: '+1 212 555 0100', type: 'general' }],
+  whatsapp_contacts: [{ number: '+1 212 555 0100', normalized: '+12125550100', status: 'CONFIRMED_PUBLIC' }],
   social_profiles: { linkedin: `https://linkedin.com/company/${hotel.name}` },
   decision_makers: [{ name: 'Jane Doe', title: 'IT Director', role_group: 'it_leadership' }],
 })
@@ -22,6 +23,7 @@ test('automatically enriches website businesses and preserves businesses without
   })
   assert.equal(calls.length, 1)
   assert.equal(prepared[0].decision_makers[0].title, 'IT Director')
+  assert.equal(prepared[0].whatsapp_contacts[0].status, 'CONFIRMED_PUBLIC')
   assert.deepEqual(prepared[1], hotels[1])
 })
 

@@ -22,6 +22,7 @@ def _merge_result(hotel, result):
         'website_confidence': result.get('website_confidence'),
         'business_emails': result.get('business_emails') or [],
         'business_phones': result.get('business_phones') or [],
+        'whatsapp_contacts': result.get('whatsapp_contacts') or [],
         'social_profiles': result.get('social_profiles') or {},
         'social_profile_sources': result.get('social_profile_sources') or {},
         'discovered_pages': result.get('discovered_pages') or {},

@@ -39,6 +39,14 @@ class BusinessPhoneSerializer(serializers.Serializer):
     source_url = serializers.CharField(required=False, allow_blank=True, allow_null=True)
 
 
+class WhatsAppContactSerializer(serializers.Serializer):
+    number = serializers.CharField()
+    normalized = serializers.CharField()
+    status = serializers.ChoiceField(choices=['CONFIRMED_PUBLIC'])
+    evidence_type = serializers.CharField()
+    source_url = serializers.CharField()
+
+
 class ExportHotelSerializer(serializers.Serializer):
     id = serializers.CharField(required=False, allow_blank=True, allow_null=True)
     place_id = serializers.CharField(required=False, allow_blank=True, allow_null=True)
@@ -61,6 +69,7 @@ class ExportHotelSerializer(serializers.Serializer):
     decision_makers = ManagerContactSerializer(many=True, required=False)
     business_emails = BusinessEmailSerializer(many=True, required=False)
     business_phones = BusinessPhoneSerializer(many=True, required=False)
+    whatsapp_contacts = WhatsAppContactSerializer(many=True, required=False)
     social_profiles = serializers.DictField(required=False)
     social_profile_sources = serializers.DictField(required=False)
     discovered_pages = serializers.DictField(required=False)

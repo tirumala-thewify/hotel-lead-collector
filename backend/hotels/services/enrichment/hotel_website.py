@@ -62,6 +62,17 @@ LABELLED_PHONE_PATTERN = re.compile(
     r'(\+?[\d][\d\s().-]{6,}\d)',
     re.IGNORECASE,
 )
+WHATSAPP_LABELLED_PHONE_PATTERN = re.compile(
+    r'whats\s*app(?:\s+(?:us|number))?\s*[:\-]?\s*'
+    r'(\+?[\d][\d\s().-]{5,}\d)',
+    re.IGNORECASE,
+)
+WHATSAPP_EVIDENCE_PRIORITY = {
+    'wa.me': 1,
+    'api.whatsapp.com': 2,
+    'whatsapp_labelled_link': 3,
+    'whatsapp_labelled_text': 4,
+}
 ENRICHED_FIELDS = ('phone', 'email', 'address', 'brand')
 CORE_CONTACT_FIELDS = ('phone', 'email', 'address')
 REJECTED_EMAIL_PREFIXES = {'privacy', 'legal', 'webmaster', 'developer'}
@@ -106,7 +117,7 @@ class ContactPageParser(HTMLParser):
                 self.mailto.append(href[7:].split('?', 1)[0])
             elif href.startswith('tel:'):
                 self.tel.append(href[4:].split('?', 1)[0])
-            elif href:
+            if href:
                 self._anchor_href = href
                 self._anchor_parts = []
         elif tag == 'script':
@@ -404,6 +415,72 @@ def _normalize_phone(value):
     return f'+{digits}' if value.startswith('+') else digits
 
 
+def _whatsapp_url_contact(value):
+    """Return explicit number evidence from a supported public WhatsApp URL.
+
+    This validates and parses the URL only. It deliberately never requests it.
+    """
+    try:
+        parsed = urlparse(value)
+        port = parsed.port
+    except (TypeError, ValueError):
+        return None
+    if (parsed.scheme not in {'http', 'https'} or not parsed.hostname
+            or parsed.username or parsed.password or port not in {None, 80, 443}):
+        return None
+    host = parsed.hostname.casefold().rstrip('.')
+    if host == 'wa.me':
+        candidate = parsed.path.strip('/').split('/', 1)[0]
+        evidence_type = 'wa.me'
+    elif host == 'api.whatsapp.com':
+        if parsed.path.rstrip('/').casefold() != '/send':
+            return None
+        from urllib.parse import parse_qs
+        candidate = (parse_qs(parsed.query).get('phone') or [None])[0]
+        evidence_type = 'api.whatsapp.com'
+    else:
+        return None
+    if not candidate or not candidate.isdigit() or not 7 <= len(candidate) <= 15:
+        return None
+    return {
+        'number': f'+{candidate}',
+        'normalized': f'+{candidate}',
+        'status': 'CONFIRMED_PUBLIC',
+        'evidence_type': evidence_type,
+    }
+
+
+def _extract_whatsapp_contacts(parser):
+    contacts = []
+    for href, anchor_text in parser.links:
+        contact = _whatsapp_url_contact(href)
+        if contact:
+            contacts.append(contact)
+            continue
+        if 'whatsapp' not in re.sub(r'[^a-z]', '', anchor_text.casefold()):
+            continue
+        if href.casefold().startswith('tel:'):
+            number = href[4:].split('?', 1)[0].strip()
+            normalized = _normalize_phone(number)
+            if normalized:
+                contacts.append({
+                    'number': number, 'normalized': normalized,
+                    'status': 'CONFIRMED_PUBLIC',
+                    'evidence_type': 'whatsapp_labelled_link',
+                })
+    visible_text = ' '.join(parser.visible_text)
+    for match in WHATSAPP_LABELLED_PHONE_PATTERN.finditer(visible_text):
+        number = ' '.join(match.group(1).strip().split())
+        normalized = _normalize_phone(number)
+        if normalized:
+            contacts.append({
+                'number': number, 'normalized': normalized,
+                'status': 'CONFIRMED_PUBLIC',
+                'evidence_type': 'whatsapp_labelled_text',
+            })
+    return contacts
+
+
 def _all_business_phones(parser, visible_text):
     values = [*parser.tel]
     values.extend(match.group(1) for match in LABELLED_PHONE_PATTERN.finditer(visible_text))
@@ -519,6 +596,7 @@ class HotelWebsiteEnrichmentProvider(HotelEnrichmentProvider):
                 'social_profile_sources': {platform: None for platform in SOCIAL_DOMAINS},
                 'business_emails': [],
                 'business_phones': [],
+                'whatsapp_contacts': [],
                 'decision_makers': [],
                 'sources': {'website': None, 'phone': None, 'email': None, 'address': None, 'brand': None},
                 'website_confidence': discovery.get('confidence'),
@@ -540,6 +618,7 @@ class HotelWebsiteEnrichmentProvider(HotelEnrichmentProvider):
             'social_profile_sources': {platform: None for platform in SOCIAL_DOMAINS},
             'business_emails': [],
             'business_phones': [],
+            'whatsapp_contacts': [],
             'decision_makers': [],
             'sources': {
                 'website': discovery['source'],
@@ -571,6 +650,19 @@ class HotelWebsiteEnrichmentProvider(HotelEnrichmentProvider):
                 allowed_domain=website_domain,
                 allow_domain_email=True,
             )
+            parser = ContactPageParser()
+            parser.feed(html)
+            for contact in _extract_whatsapp_contacts(parser):
+                contact = {**contact, 'source_url': source_url}
+                existing_index = next((
+                    index for index, item in enumerate(result['whatsapp_contacts'])
+                    if item['normalized'] == contact['normalized']
+                ), None)
+                if existing_index is None:
+                    result['whatsapp_contacts'].append(contact)
+                elif (WHATSAPP_EVIDENCE_PRIORITY[contact['evidence_type']]
+                      < WHATSAPP_EVIDENCE_PRIORITY[result['whatsapp_contacts'][existing_index]['evidence_type']]):
+                    result['whatsapp_contacts'][existing_index] = contact
             for email in contacts['business_emails']:
                 if email.casefold() not in {
                     item['email'].casefold() for item in result['business_emails']

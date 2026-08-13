@@ -175,6 +175,7 @@ def build_hotel_workbook(hotels, context):
     business_rows = []
     people_rows = []
     social_rows = []
+    whatsapp_rows = []
     for hotel in hotels:
         for item in hotel.get('business_emails') or []:
             business_rows.append((hotel.get('name'), item.get('type'),
@@ -191,6 +192,14 @@ def build_hotel_workbook(hotels, context):
                 contact.get('confidence'),
             ))
         profiles = hotel.get('social_profiles') or {}
+        for contact in hotel.get('whatsapp_contacts') or []:
+            if contact.get('status') != 'CONFIRMED_PUBLIC':
+                continue
+            whatsapp_rows.append((
+                hotel.get('name'), contact.get('number'), contact.get('normalized'),
+                contact.get('status'), contact.get('evidence_type'),
+                contact.get('source_url'), hotel.get('website'), hotel.get('phone'),
+            ))
         profile_sources = hotel.get('social_profile_sources') or {}
         source_urls = list(dict.fromkeys(
             profile_sources.get(platform) for platform in ('linkedin', 'facebook', 'instagram')
@@ -215,6 +224,12 @@ def build_hotel_workbook(hotels, context):
         workbook, 'Social Profiles',
         ['Business Name', 'LinkedIn', 'Facebook', 'Instagram', 'Source URL'],
         social_rows, link_columns=(2, 3, 4, 5),
+    )
+    _add_structured_sheet(
+        workbook, 'WhatsApp Contacts',
+        ['Hotel Name', 'WhatsApp Number', 'Normalized WhatsApp Number',
+         'WhatsApp Status', 'Evidence Type', 'Source URL', 'Website', 'Business Phone'],
+        whatsapp_rows, link_columns=(6, 7),
     )
 
     output = BytesIO()
