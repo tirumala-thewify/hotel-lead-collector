@@ -1,8 +1,11 @@
 const EXCEL_EXPORT_URL = 'http://127.0.0.1:8000/api/hotels/export/excel/'
 
+// The backend endpoint and JSON `hotels` key remain legacy-compatible.
+// User-facing export terminology is business-generic.
+
 const BASE_COLUMNS = [
   ['S.No', (_, index) => index + 1],
-  ['Hotel Name', (hotel) => hotel.name],
+  ['Business Name', (hotel) => hotel.name],
   ['Distance from Search Location (km)', (hotel) => hotel.distance_km],
   ['Address', (hotel) => hotel.address],
   ['Phone', (hotel) => hotel.phone],
@@ -103,7 +106,7 @@ function dateStamp() {
 
 function filename(extension, location) {
   const locationSlug = slug(location)
-  return `hotel-leads-${locationSlug ? `${locationSlug}-` : ''}${dateStamp()}.${extension}`
+  return `business-leads-${locationSlug ? `${locationSlug}-` : ''}${dateStamp()}.${extension}`
 }
 
 function download(blob, name) {
@@ -117,45 +120,49 @@ function download(blob, name) {
   URL.revokeObjectURL(url)
 }
 
-export function buildHotelsCsv(hotels, context) {
+export function buildBusinessesCsv(businesses, context) {
   const summary = [
     ['Search Location', context.location],
     ['Search Latitude', context.latitude],
     ['Search Longitude', context.longitude],
     ['Search Radius', context.radius],
-    ['Hotel Data Provider', context.provider],
-    ['Total Hotels', hotels.length],
+    ['Business Data Provider', context.provider],
+    ['Total Businesses', businesses.length],
     ['Exported At', new Date().toISOString()],
   ]
   const rows = [
     ...summary.map((row) => row.map(csvCell).join(',')),
     '',
     COLUMNS.map(([header]) => csvCell(header)).join(','),
-    ...hotels.map((hotel, index) => (
+    ...businesses.map((hotel, index) => (
       COLUMNS.map(([, getValue]) => csvCell(getValue(hotel, index))).join(',')
     )),
   ]
   return `\uFEFF${rows.join('\r\n')}`
 }
 
-export function exportHotelsCsv(hotels, context) {
-  const blob = new Blob([buildHotelsCsv(hotels, context)], { type: 'text/csv;charset=utf-8' })
+export function exportBusinessesCsv(businesses, context) {
+  const blob = new Blob([buildBusinessesCsv(businesses, context)], { type: 'text/csv;charset=utf-8' })
   download(blob, filename('csv', context.location))
 }
 
-export async function exportHotelsExcel(hotels, context) {
+export async function exportBusinessesExcel(businesses, context) {
   let response
   try {
     response = await fetch(EXCEL_EXPORT_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ hotels, context }),
+      body: JSON.stringify({ hotels: businesses, context }),
     })
   } catch {
-    throw new Error('Unable to export hotel data. Please try again.')
+    throw new Error('Unable to export business data. Please try again.')
   }
   if (!response.ok) {
-    throw new Error('Unable to export hotel data. Please try again.')
+    throw new Error('Unable to export business data. Please try again.')
   }
   download(await response.blob(), filename('xlsx', context.location))
 }
+
+export const buildHotelsCsv = buildBusinessesCsv
+export const exportHotelsCsv = exportBusinessesCsv
+export const exportHotelsExcel = exportBusinessesExcel

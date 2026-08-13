@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { searchLocations } from '../services/locationService.js'
+import { searchLocations } from '../locationApi.js'
 
 function LocationSearch({ onSelect }) {
   const [query, setQuery] = useState('')

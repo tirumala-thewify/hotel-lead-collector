@@ -3,9 +3,13 @@ import SecretInput from './components/SecretInput.jsx'
 import {
   fetchProviderSettings,
   updateProviderSettings,
-} from './services/providerSettingsService.js'
+} from '../../shared/api/providerSettingsApi.js'
 
 function SettingsPage() {
+  // ------------------------------------------------------------
+  // STATE
+  // Keeps provider selections and transient secret inputs local.
+  // ------------------------------------------------------------
   const [settings, setSettings] = useState(null)
   const [googleKey, setGoogleKey] = useState('')
   const [geoapifyKey, setGeoapifyKey] = useState('')
@@ -27,10 +31,18 @@ function SettingsPage() {
       ? selected.filter((item) => item !== provider) : [...selected, provider] })
   }
 
+  // ------------------------------------------------------------
+  // DATA LOADING
+  // Reads saved provider configuration without exposing stored keys.
+  // ------------------------------------------------------------
   useEffect(() => {
     fetchProviderSettings().then(setSettings).catch((requestError) => setError(requestError.message))
   }, [])
 
+  // ------------------------------------------------------------
+  // EVENT HANDLERS
+  // Persists provider choices and clears submitted secrets from UI state.
+  // ------------------------------------------------------------
   const save = async (values, clearKey) => {
     setSaving(true)
     setError('')
@@ -58,6 +70,9 @@ function SettingsPage() {
     )
   }
 
+  // ------------------------------------------------------------
+  // RENDER
+  // ------------------------------------------------------------
   return (
     <main className="settings-shell">
       <a className="back-link" href="/">← Back to business search</a>

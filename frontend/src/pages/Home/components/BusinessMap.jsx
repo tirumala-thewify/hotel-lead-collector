@@ -18,7 +18,7 @@ const searchIcon = L.divIcon({
   iconSize: [22, 22],
   iconAnchor: [11, 11],
 })
-const hotelIcon = L.divIcon({
+const businessIcon = L.divIcon({
   className: 'hotel-map-marker',
   html: '<span></span>',
   iconSize: [18, 18],
@@ -34,19 +34,19 @@ function MapClickHandler({ onLocationChange }) {
   return null
 }
 
-function MapController({ center, selectedHotel, markerRefs }) {
+function MapController({ center, selectedBusiness, markerRefs }) {
   const map = useMap()
   useEffect(() => {
     map.setView(center, map.getZoom(), { animate: true })
   }, [center, map])
   useEffect(() => {
-    const coordinates = businessCoordinates(selectedHotel)
+    const coordinates = businessCoordinates(selectedBusiness)
     if (!coordinates) return
     map.setView(coordinates, Math.max(map.getZoom(), 15), {
       animate: true,
     })
-    markerRefs.current.get(businessKey(selectedHotel))?.openPopup()
-  }, [map, markerRefs, selectedHotel])
+    markerRefs.current.get(businessKey(selectedBusiness))?.openPopup()
+  }, [map, markerRefs, selectedBusiness])
   return null
 }
 
@@ -54,10 +54,14 @@ function available(value) {
   return value || 'Not Available'
 }
 
-function HotelMap({ location, radius, hotels, onLocationChange, selectedHotel, onSelectHotel }) {
+// ============================================================
+// BUSINESS MAP
+// Displays generic business markers regardless of selected category.
+// ============================================================
+function BusinessMap({ location, radius, businesses, onLocationChange, selectedBusiness, onSelectBusiness }) {
   const markerRefs = useRef(new Map())
   const center = useMemo(() => [Number(location.latitude), Number(location.longitude)], [location])
-  const mapHotels = mappableBusinesses(hotels)
+  const mappedBusinesses = mappableBusinesses(businesses)
 
   return (
     <section className="map-card" aria-label="Business location map">
@@ -67,7 +71,7 @@ function HotelMap({ location, radius, hotels, onLocationChange, selectedHotel, o
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
         />
         <MapClickHandler onLocationChange={onLocationChange} />
-        <MapController center={center} selectedHotel={selectedHotel} markerRefs={markerRefs} />
+        <MapController center={center} selectedBusiness={selectedBusiness} markerRefs={markerRefs} />
         <Circle center={center} radius={Number(radius)} pathOptions={{ color: '#246bfd', fillOpacity: 0.09 }} />
         <Marker position={center} icon={searchIcon}>
           <Popup>
@@ -77,24 +81,24 @@ function HotelMap({ location, radius, hotels, onLocationChange, selectedHotel, o
             Radius: {(Number(radius) / 1000).toFixed(0)} km
           </Popup>
         </Marker>
-        {mapHotels.map(({ business: hotel, coordinates }) => (
+        {mappedBusinesses.map(({ business, coordinates }) => (
           <Marker
-            key={businessKey(hotel)}
+            key={businessKey(business)}
             position={coordinates}
-            icon={hotelIcon}
+            icon={businessIcon}
             ref={(marker) => {
-              const key = businessKey(hotel)
+              const key = businessKey(business)
               if (marker) markerRefs.current.set(key, marker)
               else markerRefs.current.delete(key)
             }}
-            eventHandlers={{ click: () => onSelectHotel(hotel) }}
+            eventHandlers={{ click: () => onSelectBusiness(business) }}
           >
             <Popup>
-              <strong>{available(hotel.name)}</strong><br />
-              {hotel.distance_km == null ? 'Distance: Not Available' : `${Number(hotel.distance_km).toFixed(2)} km`}<br />
-              Phone: {available(hotel.phone)}<br />
-              Email: {available(hotel.email)}<br />
-              Website: {hotel.website ? <a href={hotel.website} target="_blank" rel="noopener noreferrer">Open Website</a> : 'Not Available'}
+              <strong>{available(business.name)}</strong><br />
+              {business.distance_km == null ? 'Distance: Not Available' : `${Number(business.distance_km).toFixed(2)} km`}<br />
+              Phone: {available(business.phone)}<br />
+              Email: {available(business.email)}<br />
+              Website: {business.website ? <a href={business.website} target="_blank" rel="noopener noreferrer">Open Website</a> : 'Not Available'}
             </Popup>
           </Marker>
         ))}
@@ -104,4 +108,4 @@ function HotelMap({ location, radius, hotels, onLocationChange, selectedHotel, o
   )
 }
 
-export default HotelMap
+export default BusinessMap

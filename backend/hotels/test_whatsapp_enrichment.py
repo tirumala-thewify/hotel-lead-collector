@@ -109,7 +109,7 @@ class WhatsAppCrawlTests(SimpleTestCase):
         workbook = load_workbook(BytesIO(content))
         self.assertEqual(
             workbook.sheetnames,
-            ['Search Summary', 'Hotels', 'Business Contacts', 'Decision Makers',
+            ['Search Summary', 'Businesses', 'Business Contacts', 'Decision Makers',
              'Social Profiles', 'WhatsApp Contacts'],
         )
         sheet = workbook['WhatsApp Contacts']

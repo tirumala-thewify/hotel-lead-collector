@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 
-import { prepareHotelsForExport } from './exportEnrichmentService.js'
+import { prepareBusinessesForExport } from './exportEnrichment.js'
 
 const resultFor = (hotel) => ({
   hotel_name: hotel.name,
@@ -17,7 +17,7 @@ const resultFor = (hotel) => ({
 test('automatically enriches website businesses and preserves businesses without websites', async () => {
   const calls = []
   const hotels = [{ name: 'one', website: 'https://one.example' }, { name: 'two' }]
-  const prepared = await prepareHotelsForExport(hotels, async (batch) => {
+  const prepared = await prepareBusinessesForExport(hotels, async (batch) => {
     calls.push(batch)
     return [merge(hotels[0], resultFor(hotels[0])), hotels[1]]
   })
@@ -33,7 +33,7 @@ test('reuses completed structured enrichment without fetching', async () => {
     business_emails: [], business_phones: [], social_profiles: {}, decision_makers: [],
   }
   let called = false
-  assert.deepEqual(await prepareHotelsForExport([hotel], async (items) => { called = true; return items }), [hotel])
+  assert.deepEqual(await prepareBusinessesForExport([hotel], async (items) => { called = true; return items }), [hotel])
   assert.equal(called, true)
 })
 
@@ -41,14 +41,14 @@ test('sends more than ten businesses through the dedicated backend orchestrator'
   const hotels = Array.from({ length: 23 }, (_, index) => ({
     name: `hotel-${index}`, website: `https://hotel-${index}.example`,
   }))
-  const prepared = await prepareHotelsForExport(hotels, async (items) => items)
+  const prepared = await prepareBusinessesForExport(hotels, async (items) => items)
   assert.equal(prepared.length, 23)
 })
 
 test('export preparation failures are reported to the button workflow', async () => {
   const hotels = [{ name: 'one', website: 'https://one.example' }]
   await assert.rejects(
-    prepareHotelsForExport(hotels, async () => { throw new Error('failed') }),
+    prepareBusinessesForExport(hotels, async () => { throw new Error('failed') }),
     /failed/,
   )
 })

@@ -17,22 +17,26 @@ function statusMessage(status) {
   return 'No decision-maker search has been run.'
 }
 
-function HotelDetailsDrawer({ hotel, categoryName, onClose, onEnrich, onFindManagers, enriching, findingManagers, apolloEnabled, apolloConfigured, enrichmentAvailable }) {
+// ============================================================
+// BUSINESS DETAILS
+// Displays enriched contact, social, decision-maker, and WhatsApp data.
+// ============================================================
+function BusinessDetailsDrawer({ business, categoryName, onClose, onEnrich, onFindManagers, enriching, findingManagers, apolloEnabled, apolloConfigured, enrichmentAvailable }) {
   useEffect(() => {
-    if (!hotel) return undefined
+    if (!business) return undefined
     const closeOnEscape = (event) => { if (event.key === 'Escape') onClose() }
     window.addEventListener('keydown', closeOnEscape)
     return () => window.removeEventListener('keydown', closeOnEscape)
-  }, [hotel, onClose])
+  }, [business, onClose])
 
-  if (!hotel) return null
-  const sources = hotel.enrichment_sources || {}
-  const decisionMakers = hotel.decision_makers || hotel.manager_contacts || []
-  const businessEmails = hotel.business_emails || []
-  const businessPhones = hotel.business_phones || []
-  const whatsappContacts = hotel.whatsapp_contacts || []
-  const socialProfiles = hotel.social_profiles || {}
-  const socialSources = hotel.social_profile_sources || {}
+  if (!business) return null
+  const sources = business.enrichment_sources || {}
+  const decisionMakers = business.decision_makers || business.manager_contacts || []
+  const businessEmails = business.business_emails || []
+  const businessPhones = business.business_phones || []
+  const whatsappContacts = business.whatsapp_contacts || []
+  const socialProfiles = business.social_profiles || {}
+  const socialSources = business.social_profile_sources || {}
   const decisionMakerAvailable = apolloEnabled && apolloConfigured
   const apolloHelp = !apolloEnabled
     ? 'Apollo is disabled in Settings.'
@@ -43,17 +47,17 @@ function HotelDetailsDrawer({ hotel, categoryName, onClose, onEnrich, onFindMana
         <header>
           <div>
             <span className="section-kicker">Business details</span>
-            <h2 id="drawer-title">{value(hotel.name)}</h2>
-            <p>{hotel.distance_km == null ? 'Distance unavailable' : `${Number(hotel.distance_km).toFixed(2)} km from selected location`}</p>
+            <h2 id="drawer-title">{value(business.name)}</h2>
+            <p>{business.distance_km == null ? 'Distance unavailable' : `${Number(business.distance_km).toFixed(2)} km from selected location`}</p>
           </div>
           <button type="button" className="drawer-close" onClick={onClose} aria-label="Close business details">×</button>
         </header>
 
         <section><h3>Business Contact</h3><dl className="detail-list">
-          <div><dt>Phone</dt><dd>{value(hotel.phone)}</dd></div>
-          <div><dt>Email</dt><dd>{value(hotel.email)}</dd></div>
-          <div><dt>Website</dt><dd>{hotel.website ? <a href={hotel.website} target="_blank" rel="noopener noreferrer">Open website ↗</a> : missing}</dd></div>
-          <div className="wide-detail"><dt>Address</dt><dd>{value(hotel.address)}</dd></div>
+          <div><dt>Phone</dt><dd>{value(business.phone)}</dd></div>
+          <div><dt>Email</dt><dd>{value(business.email)}</dd></div>
+          <div><dt>Website</dt><dd>{business.website ? <a href={business.website} target="_blank" rel="noopener noreferrer">Open website ↗</a> : missing}</dd></div>
+          <div className="wide-detail"><dt>Address</dt><dd>{value(business.address)}</dd></div>
         </dl></section>
 
         <section><h3>Official Website Contacts</h3>
@@ -62,6 +66,7 @@ function HotelDetailsDrawer({ hotel, categoryName, onClose, onEnrich, onFindMana
           {businessPhones.map((contact) => <p key={`${contact.normalized}-${contact.source_url}`}>{contact.phone} <small>{contact.type || 'general'} · Source: <a href={contact.source_url} target="_blank" rel="noopener noreferrer">official page</a></small></p>)}
         </section>
 
+        {/* WHATSAPP CONTACT EVIDENCE: explicit public evidence only. */}
         <section><h3>WhatsApp</h3>
           {whatsappContacts.length ? whatsappContacts.map((contact) => <dl className="detail-list" key={contact.normalized}>
             <div><dt>WhatsApp</dt><dd>{contact.number}</dd></div>
@@ -75,12 +80,12 @@ function HotelDetailsDrawer({ hotel, categoryName, onClose, onEnrich, onFindMana
         </dl></section>}
 
         <section><h3>Business Information</h3><dl className="detail-list">
-          <div><dt>Brand</dt><dd>{value(hotel.brand)}</dd></div>
+          <div><dt>Brand</dt><dd>{value(business.brand)}</dd></div>
           <div><dt>Category</dt><dd>{value(categoryName)}</dd></div>
-          {hotel.stars && <div><dt>Stars</dt><dd>{value(hotel.stars)}</dd></div>}
-          <div><dt>{hotel.sources?.length > 1 ? 'Sources' : 'Source'}</dt><dd>{value(hotel.source)}</dd></div>
-          <div><dt>Distance</dt><dd>{hotel.distance_km == null ? missing : `${Number(hotel.distance_km).toFixed(2)} km`}</dd></div>
-          <div><dt>Coordinates</dt><dd>{value(hotel.latitude)}, {value(hotel.longitude)}</dd></div>
+          {business.stars && <div><dt>Stars</dt><dd>{value(business.stars)}</dd></div>}
+          <div><dt>{business.sources?.length > 1 ? 'Sources' : 'Source'}</dt><dd>{value(business.source)}</dd></div>
+          <div><dt>Distance</dt><dd>{business.distance_km == null ? missing : `${Number(business.distance_km).toFixed(2)} km`}</dd></div>
+          <div><dt>Coordinates</dt><dd>{value(business.latitude)}, {value(business.longitude)}</dd></div>
         </dl></section>
 
         <section><h3>Decision Makers</h3>
@@ -97,21 +102,21 @@ function HotelDetailsDrawer({ hotel, categoryName, onClose, onEnrich, onFindMana
                 {contact.source_url && <div><dt>Evidence</dt><dd><a href={contact.source_url} target="_blank" rel="noopener noreferrer">Official website page</a>{contact.confidence && <small>Confidence: {contact.confidence}</small>}</dd></div>}
               </dl>
             </article>
-          )) : <p className="muted-copy">{statusMessage(hotel.manager_status)}</p>}
-          {decisionMakers.length > 0 && <p className={`decision-maker-status status-${String(hotel.manager_status || 'FOUND').toLowerCase()}`}>{statusMessage(hotel.manager_status || 'FOUND')}</p>}
+          )) : <p className="muted-copy">{statusMessage(business.manager_status)}</p>}
+          {decisionMakers.length > 0 && <p className={`decision-maker-status status-${String(business.manager_status || 'FOUND').toLowerCase()}`}>{statusMessage(business.manager_status || 'FOUND')}</p>}
         </section>
 
         <section><h3>Data Sources</h3><dl className="source-detail-list">
-          {fields.map((field) => <div key={field}><dt>{field}</dt><dd>{value(sources[field] || hotel[`${field}_source`] || (hotel[field] ? hotel.source : null))}</dd></div>)}
+          {fields.map((field) => <div key={field}><dt>{field}</dt><dd>{value(sources[field] || business[`${field}_source`] || (business[field] ? business.source : null))}</dd></div>)}
         </dl></section>
 
         <footer className="drawer-actions">
           {!enrichmentAvailable && <p className="enrichment-limitation">Business contact enrichment for this category will be added in a later phase.</p>}
           {apolloHelp && <p className="enrichment-limitation">{apolloHelp}</p>}
-          <button type="button" className="secondary-action" disabled={!enrichmentAvailable || !hotel.website || enriching} onClick={() => onEnrich(hotel)}>
+          <button type="button" className="secondary-action" disabled={!enrichmentAvailable || !business.website || enriching} onClick={() => onEnrich(business)}>
             {enriching ? 'Enriching...' : 'Enrich Business'}
           </button>
-          <button type="button" className="primary-action" disabled={!decisionMakerAvailable || findingManagers} onClick={() => onFindManagers(hotel)} title={decisionMakerAvailable ? 'Search Apollo for business decision-makers' : apolloHelp}>
+          <button type="button" className="primary-action" disabled={!decisionMakerAvailable || findingManagers} onClick={() => onFindManagers(business)} title={decisionMakerAvailable ? 'Search Apollo for business decision-makers' : apolloHelp}>
             {findingManagers ? 'Finding decision-makers...' : 'Find Decision Makers'}
           </button>
         </footer>
@@ -120,4 +125,4 @@ function HotelDetailsDrawer({ hotel, categoryName, onClose, onEnrich, onFindMana
   )
 }
 
-export default HotelDetailsDrawer
+export default BusinessDetailsDrawer

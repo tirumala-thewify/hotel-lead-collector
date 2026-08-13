@@ -2,9 +2,9 @@ import { useState } from 'react'
 
 const MAX_BULK_BUSINESSES = 10
 
-function BulkManagerActions({ selectedHotels, providerSettings, running, summary, error, onRun }) {
+function BulkManagerActions({ selectedBusinesses, providerSettings, running, summary, error, onRun }) {
   const [confirming, setConfirming] = useState(false)
-  const count = selectedHotels.length
+  const count = selectedBusinesses.length
   const tooMany = count > MAX_BULK_BUSINESSES
   const peopleEnabled = Boolean(providerSettings?.people_providers?.length)
   const canRun = count > 0 && !tooMany && peopleEnabled && !running

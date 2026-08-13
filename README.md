@@ -1,8 +1,8 @@
-\# Hotel Lead Collector
+\# Business Lead Collector
 
 
 
-Hotel Lead Collector is a Django + React application for discovering hotels near a selected location and collecting publicly available lead information.
+Business Lead Collector is a Django + React application for discovering businesses across supported categories near a selected location and collecting publicly available lead information.
 
 
 
@@ -10,22 +10,22 @@ Hotel Lead Collector is a Django + React application for discovering hotels near
 
 
 
-\- Search hotels by location and radius
+\- Search businesses by location, category and radius
 
 \- Interactive OpenStreetMap
 
-\- OpenStreetMap / Overpass hotel discovery
+\- OpenStreetMap / Overpass business discovery
 
 \- Google Places provider support
 \- Optional experimental Playwright browser-search provider
 
-\- Hotel address, phone, email and website information
+\- Business address, phone, email and website information
 
 \- Free website enrichment
 
 \- Apollo.io manager / decision-maker enrichment
 
-\- Bulk hotel enrichment
+\- Bulk business enrichment
 
 \- CSV export
 
@@ -37,7 +37,7 @@ Hotel Lead Collector is a Django + React application for discovering hotels near
 
 \- Data coverage indicators
 
-\- Hotel details view
+\- Business details view
 
 
 
@@ -83,7 +83,7 @@ Hotel Lead Collector is a Django + React application for discovering hotels near
 
 \### OpenStreetMap
 
-The default hotel provider.
+The default business provider.
 
 
 
@@ -91,13 +91,13 @@ No API key is required.
 
 
 
-OpenStreetMap data may not contain complete contact information for every hotel.
+OpenStreetMap data may not contain complete contact information for every business.
 
 
 
 \### Google Places
 
-Optional provider for richer hotel information such as:
+Optional provider for richer business information such as:
 
 
 
@@ -117,7 +117,7 @@ A Google Places API key is required.
 
 \### Apollo
 
-Optional people-enrichment provider used to find hotel decision-makers.
+Optional people-enrichment provider used to find business decision-makers.
 
 
 
@@ -245,7 +245,7 @@ npm run build
 
 
 
-The application currently supports hotel discovery, mapping, enrichment, provider configuration, manager enrichment and lead export.
+The application currently supports multi-category business discovery, mapping, enrichment, provider configuration, decision-maker enrichment and lead export.
 
 
 

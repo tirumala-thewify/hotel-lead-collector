@@ -6,6 +6,9 @@ const ENRICH_MANAGERS_URL = 'http://127.0.0.1:8000/api/hotels/enrich-managers/'
 const BULK_ENRICH_MANAGERS_URL = 'http://127.0.0.1:8000/api/hotels/enrich-managers/bulk/'
 const PREPARE_EXPORT_URL = 'http://127.0.0.1:8000/api/hotels/export/prepare/'
 
+// Legacy backend routes and transport fields retain `/api/hotels` and `hotels`.
+// Frontend callers treat every returned record as a generic business.
+
 export class HotelServiceError extends Error {
   constructor(message, status = null) {
     super(message)
@@ -25,7 +28,7 @@ export async function fetchNearbyHotels(lat, lng, radius, category = 'hotels_res
     response = await fetch(url)
   } catch {
     throw new HotelServiceError(
-      'Cannot connect to the hotel API. Make sure the Django server is running.',
+      'Cannot connect to the business API. Make sure the Django server is running.',
     )
   }
 
@@ -33,7 +36,7 @@ export async function fetchNearbyHotels(lat, lng, radius, category = 'hotels_res
   try {
     data = JSON.parse(await response.text())
   } catch {
-    throw new HotelServiceError('The hotel API returned an invalid response.', response.status)
+    throw new HotelServiceError('The business API returned an invalid response.', response.status)
   }
 
   if (!response.ok) {
@@ -44,13 +47,13 @@ export async function fetchNearbyHotels(lat, lng, radius, category = 'hotels_res
       )
     }
     throw new HotelServiceError(
-      data?.error || 'The hotel API could not complete the request.',
+      data?.error || 'The business API could not complete the request.',
       response.status,
     )
   }
 
   if (!data || !Array.isArray(data.hotels) || typeof data.count !== 'number') {
-    throw new HotelServiceError('The hotel API returned an invalid response.', response.status)
+    throw new HotelServiceError('The business API returned an invalid response.', response.status)
   }
 
   return data
@@ -104,7 +107,7 @@ export async function enrichHotel(hotel) {
   }
   if (!response.ok) {
     throw new HotelServiceError(
-      data?.message || 'Unable to enrich this hotel at this time.',
+      data?.message || 'Unable to enrich this business at this time.',
       response.status,
     )
   }
@@ -129,7 +132,7 @@ export async function freeEnrichHotelsBulk(hotels) {
     throw new HotelServiceError('The free enrichment API returned an invalid response.', response.status)
   }
   if (!response.ok || !Array.isArray(data?.results)) {
-    throw new HotelServiceError(data?.message || 'Unable to free enrich these hotels.', response.status)
+    throw new HotelServiceError(data?.message || 'Unable to free enrich these businesses.', response.status)
   }
   return data
 }
@@ -230,3 +233,9 @@ export async function findDecisionMakersBulk(businesses, providers) {
 // Backward-compatible aliases for existing imports and integrations.
 export const findHotelManagers = findDecisionMakers
 export const findManagersBulk = findDecisionMakersBulk
+
+// Business-generic frontend names wrap the stable legacy transport functions.
+export const fetchNearbyBusinesses = fetchNearbyHotels
+export const enrichBusiness = enrichHotel
+export const freeEnrichBusinessesBulk = freeEnrichHotelsBulk
+export const prepareExportBusinesses = prepareExportHotels

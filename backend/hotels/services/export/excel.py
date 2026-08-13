@@ -17,7 +17,7 @@ MANAGER_DEPARTMENTS = {
 def export_columns():
     columns = [
         ('S.No', 'serial'),
-        ('Hotel Name', 'name'),
+        ('Business Name', 'name'),
         ('Distance from Search Location (km)', 'distance_km'),
         ('Address', 'address'),
         ('Phone', 'phone'),
@@ -116,8 +116,8 @@ def build_hotel_workbook(hotels, context):
         ('Latitude', context.get('latitude')),
         ('Longitude', context.get('longitude')),
         ('Radius', context.get('radius')),
-        ('Hotel Provider', context.get('provider')),
-        ('Total Hotels', len(hotels)),
+        ('Business Data Provider', context.get('provider')),
+        ('Total Businesses', len(hotels)),
         ('Exported At', exported_at.isoformat()),
     ]
     for label, value in summary_rows:
@@ -128,7 +128,7 @@ def build_hotel_workbook(hotels, context):
     summary.column_dimensions['A'].width = 22
     summary.column_dimensions['B'].width = 60
 
-    sheet = workbook.create_sheet('Hotels')
+    sheet = workbook.create_sheet('Businesses')
     headers = [label for label, _ in export_columns()]
     sheet.append(headers)
     for cell in sheet[1]:
@@ -227,7 +227,7 @@ def build_hotel_workbook(hotels, context):
     )
     _add_structured_sheet(
         workbook, 'WhatsApp Contacts',
-        ['Hotel Name', 'WhatsApp Number', 'Normalized WhatsApp Number',
+        ['Business Name', 'WhatsApp Number', 'Normalized WhatsApp Number',
          'WhatsApp Status', 'Evidence Type', 'Source URL', 'Website', 'Business Phone'],
         whatsapp_rows, link_columns=(6, 7),
     )

@@ -115,7 +115,7 @@ def export_excel(request):
     workbook, exported_at = build_hotel_workbook(data['hotels'], data['context'])
     location_slug = _slug(data['context'].get('location'))
     date = exported_at.date().isoformat()
-    filename = f"hotel-leads-{location_slug + '-' if location_slug else ''}{date}.xlsx"
+    filename = f"business-leads-{location_slug + '-' if location_slug else ''}{date}.xlsx"
     response = HttpResponse(
         workbook,
         content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',

@@ -1,12 +1,12 @@
 import { useState } from 'react'
-import { exportHotelsCsv, exportHotelsExcel } from '../services/exportService.js'
-import { prepareHotelsForExport } from '../services/exportEnrichmentService.js'
+import { exportBusinessesCsv, exportBusinessesExcel } from '../exportApi.js'
+import { prepareBusinessesForExport } from '../exportEnrichment.js'
 
-function ExportButtons({ hotels, context, onEnriched }) {
+function ExportButtons({ businesses, context, onEnriched }) {
   const [preparing, setPreparing] = useState(null)
   const [error, setError] = useState('')
   const [complete, setComplete] = useState('')
-  const disabled = hotels.length === 0 || Boolean(preparing)
+  const disabled = businesses.length === 0 || Boolean(preparing)
 
   const handleExport = async (format) => {
     if (disabled) return
@@ -14,10 +14,10 @@ function ExportButtons({ hotels, context, onEnriched }) {
     setError('')
     setComplete('')
     try {
-      const enrichedHotels = await prepareHotelsForExport(hotels)
-      onEnriched?.(enrichedHotels)
-      if (format === 'csv') exportHotelsCsv(enrichedHotels, context)
-      else await exportHotelsExcel(enrichedHotels, context)
+      const enrichedBusinesses = await prepareBusinessesForExport(businesses)
+      onEnriched?.(enrichedBusinesses)
+      if (format === 'csv') exportBusinessesCsv(enrichedBusinesses, context)
+      else await exportBusinessesExcel(enrichedBusinesses, context)
       setComplete(`${format.toUpperCase()} export prepared.`)
     } catch (exportError) {
       setError(exportError.message)

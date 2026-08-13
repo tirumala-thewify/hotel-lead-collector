@@ -57,7 +57,7 @@ class ExcelWorkbookTests(SimpleTestCase):
         self.assertIn('Search Summary', self.workbook().sheetnames)
 
     def test_workbook_contains_hotels(self):
-        self.assertIn('Hotels', self.workbook().sheetnames)
+        self.assertIn('Businesses', self.workbook().sheetnames)
 
     def test_workbook_contains_structured_enrichment_sheets(self):
         hotel = {
@@ -85,37 +85,37 @@ class ExcelWorkbookTests(SimpleTestCase):
         )
 
     def test_headers_are_correct(self):
-        sheet = self.workbook()['Hotels']
+        sheet = self.workbook()['Businesses']
         self.assertEqual(
             [cell.value for cell in sheet[1]],
             [label for label, _ in export_columns()],
         )
 
     def test_hotel_row_values(self):
-        row = self.workbook()['Hotels'][2]
+        row = self.workbook()['Businesses'][2]
         self.assertEqual(row[1].value, 'Roseate House')
         self.assertEqual(row[2].value, 2.1)
 
     def test_phone_plus_prefix_is_preserved_safely(self):
-        phone = self.workbook()['Hotels'].cell(2, 5)
+        phone = self.workbook()['Businesses'].cell(2, 5)
         self.assertEqual(phone.value, "'+911171558800")
         self.assertEqual(phone.number_format, '@')
 
     def test_unicode_hotel_name_is_preserved(self):
         hotel = {**HOTEL, 'name': 'होटल स्वागत'}
-        self.assertEqual(self.workbook([hotel])['Hotels'].cell(2, 2).value, 'होटल स्वागत')
+        self.assertEqual(self.workbook([hotel])['Businesses'].cell(2, 2).value, 'होटल स्वागत')
 
     def test_website_hyperlink(self):
-        cell = self.workbook()['Hotels'].cell(2, 7)
+        cell = self.workbook()['Businesses'].cell(2, 7)
         self.assertEqual(cell.hyperlink.target, HOTEL['website'])
 
     def test_manager_columns(self):
-        sheet = self.workbook()['Hotels']
+        sheet = self.workbook()['Businesses']
         self.assertEqual(sheet.cell(2, 14).value, 'Manager Name')
         self.assertEqual(sheet.cell(2, 18).hyperlink.target, 'https://linkedin.com/in/manager')
 
     def test_field_source_columns(self):
-        sheet = self.workbook()['Hotels']
+        sheet = self.workbook()['Businesses']
         headers = [cell.value for cell in sheet[1]]
         phone_source_column = headers.index('Phone Source') + 1
         self.assertEqual(
@@ -125,13 +125,13 @@ class ExcelWorkbookTests(SimpleTestCase):
 
     def test_missing_values_are_blank(self):
         hotel = {'name': 'Minimal Hotel'}
-        sheet = self.workbook([hotel])['Hotels']
+        sheet = self.workbook([hotel])['Businesses']
         self.assertIsNone(sheet.cell(2, 4).value)
         self.assertIsNone(sheet.cell(2, 14).value)
 
     def test_formula_injection_is_escaped(self):
         hotel = {**HOTEL, 'name': '=HYPERLINK("https://bad.example")'}
-        value = self.workbook([hotel])['Hotels'].cell(2, 2).value
+        value = self.workbook([hotel])['Businesses'].cell(2, 2).value
         self.assertTrue(value.startswith("'="))
 
 
@@ -148,7 +148,7 @@ class ExcelExportAPITests(APITestCase):
             response['Content-Type'],
             'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         )
-        self.assertIn('hotel-leads-delhi-airport-', response['Content-Disposition'])
+        self.assertIn('business-leads-delhi-airport-', response['Content-Disposition'])
 
     def test_invalid_hotels_payload(self):
         response = self.client.post(

@@ -2,15 +2,15 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 
 import {
-  buildHotelsCsv,
-  exportHotelsCsv,
-  exportHotelsExcel,
-} from './exportService.js'
+  buildBusinessesCsv,
+  exportBusinessesCsv,
+  exportBusinessesExcel,
+} from './exportApi.js'
 
 const context = { location: 'Delhi', latitude: 1, longitude: 2, radius: 3, provider: 'Browser Search' }
 
 test('CSV includes structured contacts, social profiles, people, and source URLs', () => {
-  const csv = buildHotelsCsv([{
+  const csv = buildBusinessesCsv([{
     name: 'Hotel, "One"',
     business_emails: [
       { email: 'sales@hotel.example', type: 'sales', source_url: 'https://hotel.example/contact' },
@@ -29,7 +29,7 @@ test('CSV includes structured contacts, social profiles, people, and source URLs
 })
 
 test('CSV distinguishes confirmed public WhatsApp evidence from unknown phones', () => {
-  const csv = buildHotelsCsv([{
+  const csv = buildBusinessesCsv([{
     name: 'Confirmed', phone: '+1 111 111 1111',
     whatsapp_contacts: [{
       number: '+1 222 222 2222', normalized: '+12222222222',
@@ -66,8 +66,8 @@ test('real CSV and Excel export signatures execute without module-scope argument
   }
   try {
     const hotels = [{ name: 'Invocation Hotel', decision_makers: [] }]
-    assert.doesNotThrow(() => exportHotelsCsv(hotels, context))
-    await assert.doesNotReject(exportHotelsExcel(hotels, context))
+    assert.doesNotThrow(() => exportBusinessesCsv(hotels, context))
+    await assert.doesNotReject(exportBusinessesExcel(hotels, context))
     assert.equal(clicks.length, 2)
     assert.match(clicks[0], /\.csv$/)
     assert.match(clicks[1], /\.xlsx$/)
